@@ -3,7 +3,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using UnitySceneManager = UnityEngine.SceneManagement.SceneManager;
 
-public class SceneManager : MonoBehaviour
+public class LevelSceneLoader : MonoBehaviour
 {
     [SerializeField] private GameObject levelPanel;
     [SerializeField] private GameObject loadPanel;
