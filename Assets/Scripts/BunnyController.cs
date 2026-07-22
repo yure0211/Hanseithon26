@@ -4,6 +4,7 @@ using UnityEngine.InputSystem;
 public sealed class BunnyController : MonoBehaviour
 {
     [SerializeField] private Rigidbody2D body;
+    [SerializeField] private Animator animator;
     [SerializeField] private float moveSpeed = 5f;
     [SerializeField] private float jumpForce = 7f;
     [SerializeField] private float jumpHoldForceRatio = 0.67f;
