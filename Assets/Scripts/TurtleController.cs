@@ -4,6 +4,7 @@ using UnityEngine.InputSystem;
 public sealed class TurtleController : MonoBehaviour
 {
     [SerializeField] private Rigidbody2D body;
+    [SerializeField] private Animator animator; 
     [SerializeField] private float moveForce = 5f;
     [SerializeField] private float maximumSpeed = 4f;
 
@@ -14,6 +15,11 @@ public sealed class TurtleController : MonoBehaviour
         if (body == null)
         {
             body = GetComponent<Rigidbody2D>();
+        }
+
+        if (animator == null)
+        {
+            animator = GetComponent<Animator>();
         }
     }
 
@@ -49,6 +55,8 @@ public sealed class TurtleController : MonoBehaviour
             movement.y += 1f;
         }
 
+        animator.SetBool("IsRun", movement.magnitude > 0.1f);
+
         movement = Vector2.ClampMagnitude(movement, 1f);
     }
 
@@ -59,7 +67,19 @@ public sealed class TurtleController : MonoBehaviour
             return;
         }
 
+        FaceInputDirection();
         body.AddForce(movement * moveForce, ForceMode2D.Force);
         body.linearVelocity = Vector2.ClampMagnitude(body.linearVelocity, maximumSpeed);
+    }
+
+    private void FaceInputDirection()
+    {
+        if (movement.sqrMagnitude <= 0.0001f)
+        {
+            return;
+        }
+
+        float facingAngle = Vector2.SignedAngle(Vector2.up, movement);
+        body.SetRotation(facingAngle);
     }
 }

@@ -158,6 +158,7 @@
 
 - 해커톤 데모는 Unity Netcode for GameObjects와 Unity Transport를 사용하는 2인 네트워크 플레이로 진행한다.
 - Host 플레이어는 거북이, Client 플레이어는 토끼를 고정으로 담당한다.
-- 기본 씬 흐름은 `MainMenuScene` → `DualPlayConnectionTestScene` → `InGame`이다.
-- 연결 테스트 씬에서 Host와 Client가 모두 접속하면 Host가 NGO 씬 전환을 실행하며, 두 실행 인스턴스가 연결을 유지한 채 `InGame`으로 함께 이동한다.
+- 기본 씬 흐름은 `MainMenuScene` → `DualPlayConnectionTestScene` → `Level` → `InGame`이다.
+- 연결 테스트 씬에서 Host와 Client가 모두 접속하면 Host가 NGO 씬 전환을 실행하며, 두 실행 인스턴스가 연결을 유지한 채 `Level`로 함께 이동한다.
+- `Level`에서는 Host만 스테이지를 선택할 수 있으며, Host가 선택하면 NGO 씬 전환으로 두 플레이어가 해당 플레이 씬으로 함께 이동한다.
 - 마지막 Host 주소와 선택한 접속 역할은 로컬 설정에 저장한다.
