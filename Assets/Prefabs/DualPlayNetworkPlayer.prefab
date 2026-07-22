@@ -156,7 +156,7 @@ MonoBehaviour:
   SyncPositionZ: 0
   SyncRotAngleX: 0
   SyncRotAngleY: 0
-  SyncRotAngleZ: 0
+  SyncRotAngleZ: 1
   SyncScaleX: 0
   SyncScaleY: 0
   SyncScaleZ: 0
@@ -187,6 +187,10 @@ MonoBehaviour:
   turtleSpawnPosition: {x: -2.5, y: -0.8}
   bunnySpawnPosition: {x: 2.5, y: -1.8}
   playerRenderer: {fileID: 8711481469115932740}
+  turtleSprite: {fileID: -8869333759741350911, guid: 15e8dad182351c94d94adfb84ce67cad, type: 3}
+  bunnySprite: {fileID: 9005124325692609714, guid: 8fcb6913e3552834aacf274e0134a379, type: 3}
+  turtleAnimatorController: {fileID: 9100000, guid: ec3224f850d7acd44bbb801731649cc1, type: 2}
+  bunnyAnimatorController: {fileID: 9100000, guid: 9f5df00a4bc627f4093621b44ef7a0d8, type: 2}
 --- !u!50 &4900422683641499323
 Rigidbody2D:
   serializedVersion: 5
