@@ -1,10 +1,8 @@
 using System.Collections;
-using TMPro;
 using Unity.Netcode;
 using Unity.Netcode.Transports.UTP;
 using UnityEngine;
 using UnityEngine.SceneManagement;
-using Hanseithon.UI;
 
 namespace Hanseithon.DualPlaySample
 {
@@ -16,12 +14,6 @@ namespace Hanseithon.DualPlaySample
         [SerializeField] private NetworkManager networkManager;
         [SerializeField] private UnityTransport transport;
         [SerializeField] private DualPlayConnectionSettings connectionSettings;
-        [Header("Existing pixel UI assets")]
-        [SerializeField] private Sprite buttonFrame;
-        [SerializeField] private Font uiFont;
-        [SerializeField] private TMP_FontAsset uiTmpFont;
-        [SerializeField] private Sprite turtlePortrait;
-        [SerializeField] private Sprite bunnyPortrait;
 
         private static DualPlayNetworkLauncher persistentInstance;
 
@@ -29,6 +21,7 @@ namespace Hanseithon.DualPlaySample
         private string statusMessage = "호스트 또는 클라이언트를 선택하세요.";
         private bool isPrimaryInstance = true;
         private bool isStartingGame;
+        private DualPlaySceneUi sceneUi;
 
         private void Awake()
         {
@@ -84,8 +77,7 @@ namespace Hanseithon.DualPlaySample
 
         private void Start()
         {
-            DualPlayUiTheme.UseAssets(buttonFrame, uiFont);
-            DualPlayUiTheme.StyleSceneButtons(buttonFrame, uiTmpFont);
+            BindSceneUi();
 
             string[] arguments = System.Environment.GetCommandLineArgs();
             bool startAsHost = false;
@@ -120,6 +112,12 @@ namespace Hanseithon.DualPlaySample
 
         private void Update()
         {
+            if (sceneUi == null)
+            {
+                BindSceneUi();
+            }
+            RefreshSceneUi();
+
             if (!isPrimaryInstance ||
                 connectionSettings == null ||
                 networkManager == null ||
@@ -147,6 +145,7 @@ namespace Hanseithon.DualPlaySample
             networkManager.OnClientConnectedCallback -= HandleClientConnected;
             networkManager.OnClientDisconnectCallback -= HandleClientDisconnected;
             SceneManager.activeSceneChanged -= HandleActiveSceneChanged;
+            UnbindSceneUi();
         }
 
         private void OnDestroy()
@@ -165,183 +164,154 @@ namespace Hanseithon.DualPlaySample
             }
         }
 
-        private void OnGUI()
+        private void BindSceneUi()
         {
-            if (!isPrimaryInstance || connectionSettings == null)
+            UnbindSceneUi();
+            sceneUi = Object.FindFirstObjectByType<DualPlaySceneUi>(FindObjectsInactive.Include);
+            if (sceneUi == null)
             {
                 return;
             }
 
-            DualPlayUiTheme.UseAssets(buttonFrame, uiFont);
+            sceneUi.HostRequested += HandleHostRequested;
+            sceneUi.ClientRequested += HandleClientRequested;
+            sceneUi.DisconnectRequested += HandleDisconnectRequested;
+            sceneUi.TurtleRequested += HandleTurtleRequested;
+            sceneUi.BunnyRequested += HandleBunnyRequested;
+            RefreshSceneUi();
+        }
 
-            string activeScene = SceneManager.GetActiveScene().name;
-            if (activeScene == connectionSettings.ConnectionSceneName)
+        private void UnbindSceneUi()
+        {
+            if (sceneUi == null)
             {
-                DrawLobbyGui();
+                return;
             }
-            else if (activeScene == connectionSettings.CharacterSelectSceneName &&
-                     networkManager.IsListening)
+
+            sceneUi.HostRequested -= HandleHostRequested;
+            sceneUi.ClientRequested -= HandleClientRequested;
+            sceneUi.DisconnectRequested -= HandleDisconnectRequested;
+            sceneUi.TurtleRequested -= HandleTurtleRequested;
+            sceneUi.BunnyRequested -= HandleBunnyRequested;
+            sceneUi = null;
+        }
+
+        private void RefreshSceneUi()
+        {
+            if (!isPrimaryInstance || sceneUi == null || connectionSettings == null)
             {
-                DrawCharacterSelectGui();
+                return;
             }
-            else if ((activeScene == connectionSettings.LevelSceneName ||
-                      activeScene == connectionSettings.GameplaySceneName) &&
-                     networkManager.IsListening)
+
+            switch (sceneUi.Mode)
             {
-                DrawGameplayHud();
+                case DualPlaySceneUi.SceneUiMode.Connection:
+                    sceneUi.SetConnectionState(
+                        address,
+                        connectionSettings.Port,
+                        networkManager.IsListening,
+                        GetConnectionSummary(),
+                        statusMessage);
+                    break;
+
+                case DualPlaySceneUi.SceneUiMode.CharacterSelect:
+                    RefreshCharacterSelectUi();
+                    break;
+
+                case DualPlaySceneUi.SceneUiMode.GameplayHud:
+                    sceneUi.SetGameplayState(
+                        $"내 역할  ·  {GetLocalRoleName()}",
+                        GetSessionSummary());
+                    break;
             }
         }
 
-        private void DrawLobbyGui()
+        private void RefreshCharacterSelectUi()
         {
-            Matrix4x4 previousMatrix = DualPlayUiTheme.BeginCanvas(true);
-
-            GUILayout.BeginArea(
-                DualPlayUiTheme.CenteredPanel(620f, 500f),
-                DualPlayUiTheme.PanelStyle);
-            GUILayout.Label("CONNECTION LOBBY", DualPlayUiTheme.CaptionStyle);
-            GUILayout.Space(8f);
-            GUILayout.Label("연결 대기실", DualPlayUiTheme.HeaderStyle);
-            GUILayout.Label("두 플레이어의 네트워크 연결을 준비합니다.", DualPlayUiTheme.SubtitleStyle);
-            GUILayout.Space(24f);
-            GUILayout.Label("호스트 주소", DualPlayUiTheme.LabelStyle);
-
-            GUI.enabled = !networkManager.IsListening;
-            address = GUILayout.TextField(
-                address,
-                64,
-                DualPlayUiTheme.TextFieldStyle,
-                GUILayout.Height(52f));
-            GUILayout.Space(8f);
-            GUILayout.Label(
-                $"UDP 포트  {connectionSettings.Port}",
-                DualPlayUiTheme.CaptionStyle);
-            GUILayout.Space(16f);
-
-            GUILayout.BeginHorizontal();
-            if (GUILayout.Button(
-                    "호스트 열기",
-                    DualPlayUiTheme.ButtonStyle,
-                    GUILayout.Height(60f)))
-            {
-                StartHost();
-            }
-            if (GUILayout.Button(
-                    "클라이언트 접속",
-                    DualPlayUiTheme.ButtonStyle,
-                    GUILayout.Height(60f)))
-            {
-                StartClient();
-            }
-            GUILayout.EndHorizontal();
-
-            GUILayout.Space(10f);
-            GUI.enabled = networkManager.IsListening;
-            if (GUILayout.Button(
-                    "연결 끊기",
-                    DualPlayUiTheme.SecondaryButtonStyle,
-                    GUILayout.Height(44f)))
-            {
-                Disconnect();
-            }
-            GUI.enabled = true;
-
-            GUILayout.Space(14f);
-            GUILayout.Label(GetConnectionSummary(), DualPlayUiTheme.StatusStyle, GUILayout.Height(40f));
-            GUILayout.Space(6f);
-            GUILayout.Label(statusMessage, DualPlayUiTheme.CenteredLabelStyle);
-            GUILayout.EndArea();
-            DualPlayUiTheme.EndCanvas(previousMatrix);
-        }
-
-        private void DrawCharacterSelectGui()
-        {
-            Matrix4x4 previousMatrix = DualPlayUiTheme.BeginCanvas(true);
-
             DualPlayNetworkPlayer localPlayer = DualPlayNetworkPlayer.LocalPlayer;
             bool canChoose = localPlayer != null && localPlayer.IsSpawned && !isStartingGame;
-            bool turtleTaken = DualPlayNetworkPlayer.IsRoleTakenByOther(DualPlayNetworkPlayer.PlayerRole.Turtle);
-            bool bunnyTaken = DualPlayNetworkPlayer.IsRoleTakenByOther(DualPlayNetworkPlayer.PlayerRole.Bunny);
+            bool turtleTaken = DualPlayNetworkPlayer.IsRoleTakenByOther(
+                DualPlayNetworkPlayer.PlayerRole.Turtle);
+            bool bunnyTaken = DualPlayNetworkPlayer.IsRoleTakenByOther(
+                DualPlayNetworkPlayer.PlayerRole.Bunny);
 
-            GUILayout.BeginArea(
-                DualPlayUiTheme.CenteredPanel(820f, 640f),
-                DualPlayUiTheme.PanelStyle);
-            GUILayout.Label("CHOOSE YOUR CHARACTER", DualPlayUiTheme.CaptionStyle);
-            GUILayout.Space(8f);
-            GUILayout.Label("캐릭터 선택", DualPlayUiTheme.HeaderStyle);
-            GUILayout.Label("두 플레이어는 서로 다른 캐릭터를 선택해야 합니다.", DualPlayUiTheme.SubtitleStyle);
-            GUILayout.Space(12f);
-
-            GUILayout.BeginHorizontal();
-            DrawRoleOption(
-                localPlayer,
-                DualPlayNetworkPlayer.PlayerRole.Turtle,
-                turtlePortrait,
-                turtleTaken,
-                canChoose);
-            DrawRoleOption(
-                localPlayer,
-                DualPlayNetworkPlayer.PlayerRole.Bunny,
-                bunnyPortrait,
-                bunnyTaken,
-                canChoose);
-            GUILayout.EndHorizontal();
-
-            GUILayout.Space(14f);
-            if (localPlayer == null)
+            string characterStatus;
+            if (isStartingGame)
             {
-                GUILayout.Label("로컬 플레이어를 준비하는 중입니다...", DualPlayUiTheme.StatusStyle);
+                characterStatus = "선택 완료 · 레벨 화면으로 이동합니다...";
+            }
+            else if (localPlayer == null)
+            {
+                characterStatus = "로컬 플레이어를 준비하는 중입니다...";
             }
             else if (localPlayer.HasSelectedRole)
             {
-                GUILayout.Label(
-                    $"내 캐릭터  ·  {GetRoleName(localPlayer.Role)}",
-                    DualPlayUiTheme.StatusStyle);
-                GUILayout.Label("상대 플레이어의 선택을 기다리고 있습니다.", DualPlayUiTheme.CenteredLabelStyle);
+                characterStatus =
+                    $"내 캐릭터  ·  {GetRoleName(localPlayer.Role)}\n" +
+                    "상대 플레이어의 선택을 기다리고 있습니다.";
             }
             else
             {
-                GUILayout.Label("토끼 또는 거북이를 선택하세요.", DualPlayUiTheme.StatusStyle);
+                characterStatus = "토끼 또는 거북이를 선택하세요.";
             }
 
-            if (isStartingGame)
+            sceneUi.SetCharacterState(
+                canChoose,
+                turtleTaken,
+                bunnyTaken,
+                GetRoleButtonText(
+                    localPlayer,
+                    DualPlayNetworkPlayer.PlayerRole.Turtle,
+                    turtleTaken),
+                GetRoleButtonText(
+                    localPlayer,
+                    DualPlayNetworkPlayer.PlayerRole.Bunny,
+                    bunnyTaken),
+                characterStatus);
+        }
+
+        private void HandleHostRequested()
+        {
+            ReadAddressFromSceneUi();
+            StartHost();
+        }
+
+        private void HandleClientRequested()
+        {
+            ReadAddressFromSceneUi();
+            StartClient();
+        }
+
+        private void HandleDisconnectRequested()
+        {
+            if (SceneManager.GetActiveScene().name == connectionSettings.ConnectionSceneName)
             {
-                GUILayout.Label("선택 완료 · 레벨 화면으로 이동합니다...", DualPlayUiTheme.CenteredLabelStyle);
+                Disconnect();
             }
-
-            GUILayout.Space(12f);
-            if (GUILayout.Button(
-                    "연결 끊고 시작 화면으로",
-                    DualPlayUiTheme.SecondaryButtonStyle,
-                    GUILayout.Height(46f)))
+            else
             {
                 DisconnectAndReturnToMainMenu();
             }
-            GUILayout.EndArea();
-            DualPlayUiTheme.EndCanvas(previousMatrix);
         }
 
-        private static void DrawRoleOption(
-            DualPlayNetworkPlayer localPlayer,
-            DualPlayNetworkPlayer.PlayerRole role,
-            Sprite portrait,
-            bool isTaken,
-            bool canChoose)
+        private static void HandleTurtleRequested()
         {
-            GUILayout.BeginVertical(GUILayout.Width(365f));
-            Rect portraitArea = GUILayoutUtility.GetRect(320f, 165f, GUILayout.ExpandWidth(true));
-            DualPlayUiTheme.DrawSprite(portraitArea, portrait);
+            DualPlayNetworkPlayer.LocalPlayer?.RequestRoleSelection(
+                DualPlayNetworkPlayer.PlayerRole.Turtle);
+        }
 
-            GUI.enabled = canChoose && !isTaken;
-            if (GUILayout.Button(
-                    GetRoleButtonText(localPlayer, role, isTaken),
-                    DualPlayUiTheme.ButtonStyle,
-                    GUILayout.Height(88f)))
+        private static void HandleBunnyRequested()
+        {
+            DualPlayNetworkPlayer.LocalPlayer?.RequestRoleSelection(
+                DualPlayNetworkPlayer.PlayerRole.Bunny);
+        }
+
+        private void ReadAddressFromSceneUi()
+        {
+            if (sceneUi != null && !string.IsNullOrWhiteSpace(sceneUi.Address))
             {
-                localPlayer.RequestRoleSelection(role);
+                address = sceneUi.Address.Trim();
             }
-            GUI.enabled = true;
-            GUILayout.EndVertical();
         }
 
         private static string GetRoleButtonText(
@@ -354,7 +324,9 @@ namespace Hanseithon.DualPlaySample
                 return $"{GetRoleName(targetRole)}\n상대가 선택함";
             }
 
-            if (localPlayer != null && localPlayer.HasSelectedRole && localPlayer.Role == targetRole)
+            if (localPlayer != null &&
+                localPlayer.HasSelectedRole &&
+                localPlayer.Role == targetRole)
             {
                 return $"{GetRoleName(targetRole)}\n선택 완료";
             }
@@ -367,27 +339,6 @@ namespace Hanseithon.DualPlaySample
         private static string GetRoleName(DualPlayNetworkPlayer.PlayerRole role)
         {
             return role == DualPlayNetworkPlayer.PlayerRole.Turtle ? "거북이" : "토끼";
-        }
-
-        private void DrawGameplayHud()
-        {
-            Matrix4x4 previousMatrix = DualPlayUiTheme.BeginCanvas(false);
-
-            GUILayout.BeginArea(new Rect(20f, 20f, 330f, 160f), DualPlayUiTheme.PanelStyle);
-            GUILayout.Label(
-                $"내 역할  ·  {GetLocalRoleName()}",
-                DualPlayUiTheme.HeaderStyle);
-            GUILayout.Label(GetSessionSummary(), DualPlayUiTheme.CaptionStyle);
-            GUILayout.Space(6f);
-            if (GUILayout.Button(
-                    "연결 끊고 시작 화면으로",
-                    DualPlayUiTheme.SecondaryButtonStyle,
-                    GUILayout.Height(42f)))
-            {
-                DisconnectAndReturnToMainMenu();
-            }
-            GUILayout.EndArea();
-            DualPlayUiTheme.EndCanvas(previousMatrix);
         }
 
         private void StartHost()
@@ -537,8 +488,7 @@ namespace Hanseithon.DualPlaySample
         private void HandleActiveSceneChanged(Scene previousScene, Scene newScene)
         {
             isStartingGame = false;
-            DualPlayUiTheme.UseAssets(buttonFrame, uiFont);
-            DualPlayUiTheme.StyleSceneButtons(buttonFrame, uiTmpFont);
+            BindSceneUi();
 
             if (newScene.name == connectionSettings.CharacterSelectSceneName)
             {
