@@ -5,6 +5,7 @@ public sealed class BunnyController : MonoBehaviour
 {
     [SerializeField] private Rigidbody2D body;
     [SerializeField] private Animator animator;
+    [SerializeField] private SpriteRenderer spriteRenderer;
     [SerializeField] private float moveSpeed = 5f;
     [SerializeField] private float jumpForce = 7f;
     [SerializeField] private float jumpHoldForceRatio = 0.67f;
@@ -28,6 +29,11 @@ public sealed class BunnyController : MonoBehaviour
         if (animator == null)
         {
             animator = GetComponent<Animator>();
+        }
+
+        if (spriteRenderer == null)
+        {
+            spriteRenderer = GetComponent<SpriteRenderer>();
         }
     }
 
@@ -101,10 +107,9 @@ public sealed class BunnyController : MonoBehaviour
     {
         if (animator == null) return;
         bool a = Mathf.Abs(velocity.x) > 0.01f;
-        if (a)
+        if (a && spriteRenderer != null)
         {
-            transform.localScale = new Vector3(horizontalMove, 1f, 1f); 
-            
+            spriteRenderer.flipX = horizontalMove < 0f;
         }
         animator.SetBool("IsRun",a);
         animator.SetBool("IsGround", isGrounded);

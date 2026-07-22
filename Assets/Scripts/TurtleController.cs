@@ -9,6 +9,7 @@ public sealed class TurtleController : MonoBehaviour
     [SerializeField] private float maximumSpeed = 4f;
 
     private Vector2 movement;
+    private Vector2 facingDirection = Vector2.right;
 
     private void Awake()
     {
@@ -55,6 +56,7 @@ public sealed class TurtleController : MonoBehaviour
             movement.y += 1f;
         }
 
+        UpdateFacingDirection(keyboard);
         animator.SetBool("IsRun", movement.magnitude > 0.1f);
 
         movement = Vector2.ClampMagnitude(movement, 1f);
@@ -74,12 +76,56 @@ public sealed class TurtleController : MonoBehaviour
 
     private void FaceInputDirection()
     {
-        if (movement.sqrMagnitude <= 0.0001f)
+        float facingAngle;
+        if (facingDirection == Vector2.right)
         {
-            return;
+            facingAngle = 0f;
+        }
+        else if (facingDirection == Vector2.down)
+        {
+            facingAngle = -90f;
+        }
+        else if (facingDirection == Vector2.left)
+        {
+            facingAngle = 180f;
+        }
+        else
+        {
+            facingAngle = 90f;
         }
 
-        float facingAngle = Vector2.SignedAngle(Vector2.up, movement);
         body.SetRotation(facingAngle);
+    }
+
+    private void UpdateFacingDirection(Keyboard keyboard)
+    {
+        bool hasHorizontalInput = Mathf.Abs(movement.x) > 0.01f;
+        bool hasVerticalInput = Mathf.Abs(movement.y) > 0.01f;
+
+        if (hasHorizontalInput && !hasVerticalInput)
+        {
+            facingDirection = movement.x > 0f ? Vector2.right : Vector2.left;
+        }
+        else if (hasVerticalInput && !hasHorizontalInput)
+        {
+            facingDirection = movement.y > 0f ? Vector2.up : Vector2.down;
+        }
+
+        if (keyboard.aKey.wasPressedThisFrame || keyboard.leftArrowKey.wasPressedThisFrame)
+        {
+            facingDirection = Vector2.left;
+        }
+        if (keyboard.dKey.wasPressedThisFrame || keyboard.rightArrowKey.wasPressedThisFrame)
+        {
+            facingDirection = Vector2.right;
+        }
+        if (keyboard.sKey.wasPressedThisFrame || keyboard.downArrowKey.wasPressedThisFrame)
+        {
+            facingDirection = Vector2.down;
+        }
+        if (keyboard.wKey.wasPressedThisFrame || keyboard.upArrowKey.wasPressedThisFrame)
+        {
+            facingDirection = Vector2.up;
+        }
     }
 }
