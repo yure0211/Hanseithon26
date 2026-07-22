@@ -18,6 +18,13 @@ public class LevelSceneLoader : MonoBehaviour
             return;
         }
 
+        if (string.IsNullOrWhiteSpace(sceneName) ||
+            !Application.CanStreamedLevelBeLoaded(sceneName))
+        {
+            Debug.Log($"로드할 수 없는 씬입니다: {sceneName}");
+            return;
+        }
+
         isLoading = true;
 
         if (levelPanel != null)
