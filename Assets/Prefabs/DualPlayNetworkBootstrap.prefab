@@ -122,8 +122,3 @@ MonoBehaviour:
   networkManager: {fileID: 382390577078179129}
   transport: {fileID: 7167347354020515233}
   connectionSettings: {fileID: 11400000, guid: cf14fc11f428abe43aca279cf4a94ce1, type: 2}
-  buttonFrame: {fileID: -4082980626985523576, guid: 2dcbe4ceac02d674c93941b5081d9e95, type: 3}
-  uiFont: {fileID: 12800000, guid: 371d39d2ebedc514794419de0f2b5670, type: 3}
-  uiTmpFont: {fileID: 11400000, guid: 832ab0a60e55edc4d9a2e2b729fc63f2, type: 2}
-  turtlePortrait: {fileID: -8869333759741350911, guid: 15e8dad182351c94d94adfb84ce67cad, type: 3}
-  bunnyPortrait: {fileID: 9005124325692609714, guid: 8fcb6913e3552834aacf274e0134a379, type: 3}
