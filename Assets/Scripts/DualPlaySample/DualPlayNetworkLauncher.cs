@@ -4,19 +4,21 @@ using UnityEngine;
 
 namespace Hanseithon.DualPlaySample
 {
+    [DefaultExecutionOrder(-1000)]
     [RequireComponent(typeof(NetworkManager))]
     [RequireComponent(typeof(UnityTransport))]
     public sealed class DualPlayNetworkLauncher : MonoBehaviour
     {
-        private const int MaximumPlayers = 2;
-
         [SerializeField] private NetworkManager networkManager;
         [SerializeField] private UnityTransport transport;
-        [SerializeField] private GameObject playerPrefab;
-        [SerializeField] private string address = "127.0.0.1";
-        [SerializeField] private ushort port = 7777;
+        [SerializeField] private DualPlayConnectionSettings connectionSettings;
 
-        private string statusMessage = "Choose Host or Client.";private GUIStyle headerStyle;
+        private static DualPlayNetworkLauncher persistentInstance;
+
+        private string address;
+        private string statusMessage = "Choose Host or Client.";
+        private bool isPrimaryInstance = true;
+        private GUIStyle headerStyle;
         private GUIStyle wrappedLabelStyle;
 
         private void Awake()
@@ -31,11 +33,37 @@ namespace Hanseithon.DualPlaySample
             {
                 transport = GetComponent<UnityTransport>();
             }
+
+            if (connectionSettings == null)
+            {
+                isPrimaryInstance = false;
+                enabled = false;
+                Debug.LogError("DualPlayConnectionSettings is not assigned.", this);
+                return;
+            }
+
+            address = connectionSettings.LoadAddress();
+
+            if (!connectionSettings.PersistAcrossScenes)
+            {
+                return;
+            }
+
+            if (persistentInstance != null && persistentInstance != this)
+            {
+                isPrimaryInstance = false;
+                gameObject.SetActive(false);
+                Destroy(gameObject);
+                return;
+            }
+
+            persistentInstance = this;
+            DontDestroyOnLoad(gameObject);
         }
 
         private void OnEnable()
         {
-            if (networkManager == null)
+            if (!isPrimaryInstance || networkManager == null)
             {
                 return;
             }
@@ -46,7 +74,7 @@ namespace Hanseithon.DualPlaySample
 
         private void OnDisable()
         {
-            if (networkManager == null)
+            if (!isPrimaryInstance || networkManager == null)
             {
                 return;
             }
@@ -55,8 +83,29 @@ namespace Hanseithon.DualPlaySample
             networkManager.OnClientDisconnectCallback -= HandleClientDisconnected;
         }
 
+        private void OnDestroy()
+        {
+            if (persistentInstance == this)
+            {
+                persistentInstance = null;
+            }
+        }
+
+        private void OnApplicationQuit()
+        {
+            if (isPrimaryInstance && connectionSettings != null)
+            {
+                connectionSettings.SaveAddress(address);
+            }
+        }
+
         private void OnGUI()
         {
+            if (!isPrimaryInstance || connectionSettings == null)
+            {
+                return;
+            }
+
             EnsureGuiStyles();
 
             GUILayout.BeginArea(new Rect(20f, 20f, 390f, 310f), GUI.skin.box);
@@ -66,7 +115,7 @@ namespace Hanseithon.DualPlaySample
 
             GUI.enabled = !networkManager.IsListening;
             address = GUILayout.TextField(address, 64);
-            GUILayout.Label($"UDP port: {port}", wrappedLabelStyle);
+            GUILayout.Label($"UDP port: {connectionSettings.Port}", wrappedLabelStyle);
             GUILayout.Space(4f);
 
             GUILayout.BeginHorizontal();
@@ -97,6 +146,8 @@ namespace Hanseithon.DualPlaySample
 
         private void StartHost()
         {
+            connectionSettings.SaveAddress(address);
+
             if (!PrepareNetwork(true))
             {
                 return;
@@ -109,13 +160,15 @@ namespace Hanseithon.DualPlaySample
 
         private void StartClient()
         {
+            connectionSettings.SaveAddress(address);
+
             if (!PrepareNetwork(false))
             {
                 return;
             }
 
             statusMessage = networkManager.StartClient()
-                ? $"Connecting to {address}:{port}..."
+                ? $"Connecting to {address}:{connectionSettings.Port}..."
                 : "Client could not start. Check the address and Console.";
         }
 
@@ -125,9 +178,10 @@ namespace Hanseithon.DualPlaySample
             {
                 return false;
             }
+            GameObject playerPrefab = connectionSettings.PlayerPrefab;
             if (playerPrefab == null)
             {
-                statusMessage = "Player prefab is not assigned.";
+                statusMessage = "Player prefab is not assigned in the shared settings.";
                 return false;
             }
 
@@ -135,13 +189,14 @@ namespace Hanseithon.DualPlaySample
             networkManager.NetworkConfig.ConnectionApproval = true;
             networkManager.NetworkConfig.PlayerPrefab = playerPrefab;
             networkManager.ConnectionApprovalCallback = ApproveConnection;
-            transport.SetConnectionData(address, port, isHost ? "0.0.0.0" : null);
+            transport.SetConnectionData(address, connectionSettings.Port, isHost ? "0.0.0.0" : null);
             return true;
         }
 
         private void ApproveConnection(NetworkManager.ConnectionApprovalRequest request, NetworkManager.ConnectionApprovalResponse response)
         {
-            bool hasRoom = networkManager.ConnectedClientsIds.Count < MaximumPlayers;
+            int maximumPlayers = connectionSettings.MaximumPlayers;
+            bool hasRoom = networkManager.ConnectedClientsIds.Count < maximumPlayers;
             response.Approved = hasRoom;
             response.CreatePlayerObject = hasRoom;
             response.Pending = false;
@@ -166,7 +221,7 @@ namespace Hanseithon.DualPlaySample
         {
             if (networkManager.IsServer)
             {
-                statusMessage = $"Player connected ({networkManager.ConnectedClientsIds.Count}/{MaximumPlayers}).";
+                statusMessage = $"Player connected ({networkManager.ConnectedClientsIds.Count}/{connectionSettings.MaximumPlayers}).";
             }
             else if (clientId == networkManager.LocalClientId)
             {
@@ -178,7 +233,7 @@ namespace Hanseithon.DualPlaySample
         {
             if (networkManager.IsServer)
             {
-                statusMessage = $"Player disconnected ({networkManager.ConnectedClientsIds.Count}/{MaximumPlayers}).";
+                statusMessage = $"Player disconnected ({networkManager.ConnectedClientsIds.Count}/{connectionSettings.MaximumPlayers}).";
             }
             else if (clientId == networkManager.LocalClientId)
             {
@@ -196,7 +251,7 @@ namespace Hanseithon.DualPlaySample
             }
             if (networkManager.IsHost)
             {
-                return $"Mode: Host | Players: {networkManager.ConnectedClientsIds.Count}/{MaximumPlayers}";
+                return $"Mode: Host | Players: {networkManager.ConnectedClientsIds.Count}/{connectionSettings.MaximumPlayers}";
             }
             if (networkManager.IsClient)
             {
