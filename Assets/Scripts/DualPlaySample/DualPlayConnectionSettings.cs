@@ -23,6 +23,7 @@ namespace Hanseithon.DualPlaySample
         [Header("Scene flow")]
         [SerializeField] private string mainMenuSceneName = "MainMenuScene";
         [SerializeField] private string connectionSceneName = "DualPlayConnectionTestScene";
+        [SerializeField] private string characterSelectSceneName = "CharacterSelectScene";
         [SerializeField] private string levelSceneName = "Level";
         [SerializeField] private string gameplaySceneName = "InGame";
         [SerializeField] private bool autoStartGameWhenFull = true;
@@ -36,6 +37,7 @@ namespace Hanseithon.DualPlaySample
         public bool RememberLastAddress => rememberLastAddress;
         public string MainMenuSceneName => NormalizeSceneName(mainMenuSceneName, "MainMenuScene");
         public string ConnectionSceneName => NormalizeSceneName(connectionSceneName, "DualPlayConnectionTestScene");
+        public string CharacterSelectSceneName => NormalizeSceneName(characterSelectSceneName, "CharacterSelectScene");
         public string LevelSceneName => NormalizeSceneName(levelSceneName, "Level");
         public string GameplaySceneName => NormalizeSceneName(gameplaySceneName, "InGame");
         public bool AutoStartGameWhenFull => autoStartGameWhenFull;
@@ -66,7 +68,7 @@ namespace Hanseithon.DualPlaySample
         public void SaveSessionSelection(string value, bool isHost)
         {
             SaveAddress(value);
-            PlayerPrefs.SetString(LastModeKey, isHost ? "Host-Turtle" : "Client-Bunny");
+            PlayerPrefs.SetString(LastModeKey, isHost ? "Host" : "Client");
             PlayerPrefs.Save();
         }
 
@@ -87,6 +89,7 @@ namespace Hanseithon.DualPlaySample
             maximumPlayers = Mathf.Max(2, maximumPlayers);
             mainMenuSceneName = NormalizeSceneName(mainMenuSceneName, "MainMenuScene");
             connectionSceneName = NormalizeSceneName(connectionSceneName, "DualPlayConnectionTestScene");
+            characterSelectSceneName = NormalizeSceneName(characterSelectSceneName, "CharacterSelectScene");
             levelSceneName = NormalizeSceneName(levelSceneName, "Level");
             gameplaySceneName = NormalizeSceneName(gameplaySceneName, "InGame");
             autoStartDelay = Mathf.Max(0f, autoStartDelay);

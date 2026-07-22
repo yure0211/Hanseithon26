@@ -29,6 +29,26 @@ namespace Hanseithon.DualPlaySample
             NetworkVariableReadPermission.Everyone,
             NetworkVariableWritePermission.Server);
 
+        private readonly NetworkVariable<bool> hasSelectedRole = new NetworkVariable<bool>(
+            false,
+            NetworkVariableReadPermission.Everyone,
+            NetworkVariableWritePermission.Server);
+
+        private readonly NetworkVariable<bool> animationIsRunning = new NetworkVariable<bool>(
+            false,
+            NetworkVariableReadPermission.Everyone,
+            NetworkVariableWritePermission.Owner);
+
+        private readonly NetworkVariable<bool> animationIsGrounded = new NetworkVariable<bool>(
+            false,
+            NetworkVariableReadPermission.Everyone,
+            NetworkVariableWritePermission.Owner);
+
+        private readonly NetworkVariable<float> animationYVelocity = new NetworkVariable<float>(
+            0f,
+            NetworkVariableReadPermission.Everyone,
+            NetworkVariableWritePermission.Owner);
+
         private readonly NetworkVariable<int> animationStateHash = new NetworkVariable<int>(
             0,
             NetworkVariableReadPermission.Everyone,
@@ -51,9 +71,14 @@ namespace Hanseithon.DualPlaySample
 
         private static readonly Color TurtleColor = new Color(0.28f, 0.72f, 0.4f, 1f);
         private static readonly Color BunnyColor = new Color(0.95f, 0.62f, 0.3f, 1f);
+        private static readonly int IsRunParameter = Animator.StringToHash("IsRun");
+        private static readonly int IsGroundParameter = Animator.StringToHash("IsGround");
+        private static readonly int YVelocityParameter = Animator.StringToHash("YVelocity");
 
-        public static string LocalRoleName => hasLocalRole ? localRole.ToString() : "Connecting";
+        public static DualPlayNetworkPlayer LocalPlayer { get; private set; }
+        public static string LocalRoleName => hasLocalRole ? localRole.ToString() : "Not selected";
         public PlayerRole Role => role.Value;
+        public bool HasSelectedRole => hasSelectedRole.Value;
 
         private void Awake()
         {
@@ -112,21 +137,18 @@ namespace Hanseithon.DualPlaySample
             base.OnNetworkSpawn();
 
             role.OnValueChanged += HandleRoleChanged;
+            hasSelectedRole.OnValueChanged += HandleSelectionChanged;
+            animationIsRunning.OnValueChanged += HandleAnimationIsRunningChanged;
+            animationIsGrounded.OnValueChanged += HandleAnimationIsGroundedChanged;
+            animationYVelocity.OnValueChanged += HandleAnimationYVelocityChanged;
             animationStateHash.OnValueChanged += HandleAnimationStateChanged;
             facingLeft.OnValueChanged += HandleFacingChanged;
             SceneManager.activeSceneChanged += HandleActiveSceneChanged;
 
-            if (IsServer)
-            {
-                role.Value = OwnerClientId == NetworkManager.ServerClientId
-                    ? PlayerRole.Turtle
-                    : PlayerRole.Bunny;
-            }
-
             if (IsOwner)
             {
-                hasLocalRole = true;
-                localRole = role.Value;
+                LocalPlayer = this;
+                RefreshLocalRole();
             }
 
             ConfigureRoleAndScene();
@@ -134,10 +156,48 @@ namespace Hanseithon.DualPlaySample
             playerRenderer.flipX = facingLeft.Value;
         }
 
-        private void Update()
+        public override void OnNetworkDespawn()
         {
-            if (!IsSpawned || !IsOwner || playerAnimator == null ||
-                playerAnimator.runtimeAnimatorController == null)
+            role.OnValueChanged -= HandleRoleChanged;
+            hasSelectedRole.OnValueChanged -= HandleSelectionChanged;
+            animationIsRunning.OnValueChanged -= HandleAnimationIsRunningChanged;
+            animationIsGrounded.OnValueChanged -= HandleAnimationIsGroundedChanged;
+            animationYVelocity.OnValueChanged -= HandleAnimationYVelocityChanged;
+            animationStateHash.OnValueChanged -= HandleAnimationStateChanged;
+            facingLeft.OnValueChanged -= HandleFacingChanged;
+            SceneManager.activeSceneChanged -= HandleActiveSceneChanged;
+
+            if (IsOwner)
+            {
+                hasLocalRole = false;
+                if (LocalPlayer == this)
+                {
+                    LocalPlayer = null;
+                }
+            }
+
+            bunnyController.enabled = false;
+            turtleController.enabled = false;
+            base.OnNetworkDespawn();
+        }
+
+        private void HandleRoleChanged(PlayerRole previousRole, PlayerRole newRole)
+        {
+            if (IsOwner && hasSelectedRole.Value)
+            {
+                localRole = newRole;
+            }
+
+            ConfigureRoleAndScene();
+            ApplyAnimationState(animationStateHash.Value);
+            playerRenderer.flipX = facingLeft.Value;
+        }
+
+        private void LateUpdate()
+        {
+            if (!IsSpawned || !IsOwner || !hasSelectedRole.Value ||
+                SceneManager.GetActiveScene().name != gameplaySceneName ||
+                playerAnimator == null || playerAnimator.runtimeAnimatorController == null)
             {
                 return;
             }
@@ -145,6 +205,27 @@ namespace Hanseithon.DualPlaySample
             if (facingLeft.Value != playerRenderer.flipX)
             {
                 facingLeft.Value = playerRenderer.flipX;
+            }
+
+            bool isRunning = playerAnimator.GetBool(IsRunParameter);
+            if (animationIsRunning.Value != isRunning)
+            {
+                animationIsRunning.Value = isRunning;
+            }
+
+            if (role.Value == PlayerRole.Bunny)
+            {
+                bool isGrounded = playerAnimator.GetBool(IsGroundParameter);
+                if (animationIsGrounded.Value != isGrounded)
+                {
+                    animationIsGrounded.Value = isGrounded;
+                }
+
+                float yVelocity = playerAnimator.GetFloat(YVelocityParameter);
+                if (Mathf.Abs(animationYVelocity.Value - yVelocity) > 0.01f)
+                {
+                    animationYVelocity.Value = yVelocity;
+                }
             }
 
             if (playerAnimator.layerCount == 0 || playerAnimator.IsInTransition(0))
@@ -159,31 +240,155 @@ namespace Hanseithon.DualPlaySample
             }
         }
 
-        public override void OnNetworkDespawn()
-        {
-            role.OnValueChanged -= HandleRoleChanged;
-            animationStateHash.OnValueChanged -= HandleAnimationStateChanged;
-            facingLeft.OnValueChanged -= HandleFacingChanged;
-            SceneManager.activeSceneChanged -= HandleActiveSceneChanged;
-
-            if (IsOwner)
-            {
-                hasLocalRole = false;
-            }
-
-            bunnyController.enabled = false;
-            turtleController.enabled = false;
-            base.OnNetworkDespawn();
-        }
-
-        private void HandleRoleChanged(PlayerRole previousRole, PlayerRole newRole)
+        private void HandleSelectionChanged(bool previousValue, bool newValue)
         {
             if (IsOwner)
             {
-                localRole = newRole;
+                RefreshLocalRole();
             }
 
             ConfigureRoleAndScene();
+        }
+
+        private void HandleAnimationIsRunningChanged(bool previousValue, bool newValue)
+        {
+            ApplyAnimatorParameters();
+        }
+
+        private void HandleAnimationIsGroundedChanged(bool previousValue, bool newValue)
+        {
+            ApplyAnimatorParameters();
+        }
+
+        private void HandleAnimationYVelocityChanged(float previousValue, float newValue)
+        {
+            ApplyAnimatorParameters();
+        }
+
+        private void HandleAnimationStateChanged(int previousStateHash, int newStateHash)
+        {
+            if (!IsOwner)
+            {
+                ApplyAnimatorParameters();
+                ApplyAnimationState(newStateHash);
+            }
+        }
+
+        private void HandleFacingChanged(bool previousFacingLeft, bool newFacingLeft)
+        {
+            if (!IsOwner)
+            {
+                playerRenderer.flipX = newFacingLeft;
+            }
+        }
+
+        public void RequestRoleSelection(PlayerRole requestedRole)
+        {
+            if (!IsOwner || !IsSpawned)
+            {
+                return;
+            }
+
+            SelectRoleServerRpc(requestedRole);
+        }
+
+        public static bool IsRoleTakenByOther(PlayerRole requestedRole)
+        {
+            DualPlayNetworkPlayer[] players = FindObjectsByType<DualPlayNetworkPlayer>(FindObjectsSortMode.None);
+            for (int i = 0; i < players.Length; i++)
+            {
+                DualPlayNetworkPlayer player = players[i];
+                if (player == LocalPlayer || !player.IsSpawned || !player.HasSelectedRole)
+                {
+                    continue;
+                }
+
+                if (player.Role == requestedRole)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        public static bool AreAllPlayersReady(int expectedPlayerCount)
+        {
+            DualPlayNetworkPlayer[] players = FindObjectsByType<DualPlayNetworkPlayer>(FindObjectsSortMode.None);
+            int readyPlayers = 0;
+            bool turtleSelected = false;
+            bool bunnySelected = false;
+
+            for (int i = 0; i < players.Length; i++)
+            {
+                DualPlayNetworkPlayer player = players[i];
+                if (!player.IsSpawned)
+                {
+                    continue;
+                }
+
+                if (!player.HasSelectedRole)
+                {
+                    return false;
+                }
+
+                if (player.Role == PlayerRole.Turtle)
+                {
+                    if (turtleSelected)
+                    {
+                        return false;
+                    }
+                    turtleSelected = true;
+                }
+                else
+                {
+                    if (bunnySelected)
+                    {
+                        return false;
+                    }
+                    bunnySelected = true;
+                }
+
+                readyPlayers++;
+            }
+
+            return readyPlayers == expectedPlayerCount && turtleSelected && bunnySelected;
+        }
+
+        [ServerRpc]
+        private void SelectRoleServerRpc(PlayerRole requestedRole)
+        {
+            if (requestedRole != PlayerRole.Turtle && requestedRole != PlayerRole.Bunny)
+            {
+                return;
+            }
+
+            DualPlayNetworkPlayer[] players = FindObjectsByType<DualPlayNetworkPlayer>(FindObjectsSortMode.None);
+            for (int i = 0; i < players.Length; i++)
+            {
+                DualPlayNetworkPlayer player = players[i];
+                if (player == this || !player.IsSpawned || !player.HasSelectedRole)
+                {
+                    continue;
+                }
+
+                if (player.Role == requestedRole)
+                {
+                    return;
+                }
+            }
+
+            role.Value = requestedRole;
+            hasSelectedRole.Value = true;
+        }
+
+        private void RefreshLocalRole()
+        {
+            hasLocalRole = hasSelectedRole.Value;
+            if (hasLocalRole)
+            {
+                localRole = role.Value;
+            }
         }
 
         private void HandleAnimationStateChanged(int previousStateHash, int newStateHash)
@@ -212,10 +417,10 @@ namespace Hanseithon.DualPlaySample
         {
             PlayerRole currentRole = role.Value;
             bool isGameplay = SceneManager.GetActiveScene().name == gameplaySceneName;
-            bool controlsEnabled = IsSpawned && IsOwner && isGameplay;
+            bool controlsEnabled = IsSpawned && IsOwner && isGameplay && hasSelectedRole.Value;
 
             ConfigureVisual(currentRole);
-            playerRenderer.enabled = isGameplay;
+            playerRenderer.enabled = isGameplay && hasSelectedRole.Value;
             gameObject.name = currentRole == PlayerRole.Turtle ? "NetworkTurtle" : "NetworkBunny";
 
             if (isGameplay)
@@ -286,7 +491,23 @@ namespace Hanseithon.DualPlaySample
                 playerAnimator.Update(0f);
             }
 
+            ApplyAnimatorParameters();
             ApplyAnimationState(animationStateHash.Value);
+        }
+
+        private void ApplyAnimatorParameters()
+        {
+            if (IsOwner || playerAnimator == null || playerAnimator.runtimeAnimatorController == null)
+            {
+                return;
+            }
+
+            playerAnimator.SetBool(IsRunParameter, animationIsRunning.Value);
+            if (role.Value == PlayerRole.Bunny)
+            {
+                playerAnimator.SetBool(IsGroundParameter, animationIsGrounded.Value);
+                playerAnimator.SetFloat(YVelocityParameter, animationYVelocity.Value);
+            }
         }
 
         private void ApplyAnimationState(int stateHash)

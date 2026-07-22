@@ -20,6 +20,7 @@ MonoBehaviour:
   rememberLastAddress: 1
   mainMenuSceneName: MainMenuScene
   connectionSceneName: DualPlayConnectionTestScene
+  characterSelectSceneName: CharacterSelectScene
   levelSceneName: Level
   gameplaySceneName: InGame
   autoStartGameWhenFull: 1
