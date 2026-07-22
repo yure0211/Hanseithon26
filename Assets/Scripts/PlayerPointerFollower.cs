@@ -35,7 +35,9 @@ namespace Hanseithon.Gameplay
                 ResolveTarget();
             }
 
-            bool hasTarget = target != null && target.gameObject.activeInHierarchy;
+            SpriteRenderer targetRenderer = target != null ? target.GetComponent<SpriteRenderer>() : null;
+            bool hasTarget = target != null && target.gameObject.activeInHierarchy &&
+                             (targetRenderer == null || targetRenderer.enabled);
             pointerRenderer.enabled = hasTarget;
             if (!hasTarget)
             {
