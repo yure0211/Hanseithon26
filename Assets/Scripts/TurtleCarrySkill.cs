@@ -11,7 +11,6 @@ namespace Hanseithon.Gameplay
         [SerializeField] private Key interactionKey = Key.E;
         [SerializeField, Min(0.1f)] private float interactionRadius = 1.75f;
         [SerializeField, Min(0.1f)] private float carryDistance = 1.15f;
-        [SerializeField, Range(0f, 1f)] private float releaseVelocityRatio = 0.5f;
         [SerializeField] private bool showControlHint = true;
 
         private Rigidbody2D body;
@@ -47,7 +46,8 @@ namespace Hanseithon.Gameplay
                 return;
             }
 
-            Vector2 carryPosition = (Vector2)transform.position + Vector2.up * carryDistance;
+            Vector2 headDirection = transform.right;
+            Vector2 carryPosition = body.position + headDirection * carryDistance;
             heldBox.MoveWhileHeld(carryPosition);
         }
 
@@ -105,7 +105,7 @@ namespace Hanseithon.Gameplay
 
             TurtleCarryableBox boxToDrop = heldBox;
             heldBox = null;
-            boxToDrop.Drop(body != null ? body.linearVelocity * releaseVelocityRatio : Vector2.zero);
+            boxToDrop.Drop(Vector2.zero);
         }
 
         private void OnGUI()

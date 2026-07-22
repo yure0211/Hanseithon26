@@ -22,6 +22,6 @@ MonoBehaviour:
   connectionSceneName: DualPlayConnectionTestScene
   characterSelectSceneName: CharacterSelectScene
   levelSceneName: Level
-  gameplaySceneName: InGame
+  gameplaySceneName: InGame_1
   autoStartGameWhenFull: 1
   autoStartDelay: 1

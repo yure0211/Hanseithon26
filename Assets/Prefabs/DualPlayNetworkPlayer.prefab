@@ -17,6 +17,7 @@ GameObject:
   - component: {fileID: 8035447204584577920}
   - component: {fileID: 8791971598969372795}
   - component: {fileID: 3292353202517569702}
+  - component: {fileID: 6120667248311829944}
   m_Layer: 0
   m_Name: DualPlayNetworkPlayer
   m_TagString: Untagged
@@ -183,7 +184,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Hanseithon.DualPlaySample.DualPlayNetworkPlayer
   ShowTopMostFoldoutHeaderGroup: 1
-  gameplaySceneName: InGame
+  gameplaySceneName: InGame_1
   turtleSpawnPosition: {x: -2.5, y: -0.8}
   bunnySpawnPosition: {x: 2.5, y: -1.8}
   playerRenderer: {fileID: 8711481469115932740}
@@ -300,3 +301,16 @@ MonoBehaviour:
   body: {fileID: 0}
   moveForce: 5
   maximumSpeed: 4
+--- !u!114 &6120667248311829944
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 816875712990026510}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ddb4ef2777d344c49e3d3638820857fd, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::Hanseithon.Gameplay.BunnyKeyInventory
+  ShowTopMostFoldoutHeaderGroup: 1
