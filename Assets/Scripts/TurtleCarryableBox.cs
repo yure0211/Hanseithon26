@@ -8,6 +8,8 @@ namespace Hanseithon.Gameplay
     [RequireComponent(typeof(SpriteRenderer))]
     public sealed class TurtleCarryableBox : MonoBehaviour
     {
+        private const string HeldLayerName = "Player";
+
         [SerializeField, Min(1f)] private float heldScaleMultiplier = 1.15f;
 
         private Rigidbody2D body;
@@ -17,6 +19,7 @@ namespace Hanseithon.Gameplay
         private RigidbodyConstraints2D originalConstraints;
         private float originalGravityScale;
         private float originalLinearDamping;
+        private int originalLayer;
         private Vector3 originalScale;
 
         public bool IsHeld { get; private set; }
@@ -47,10 +50,12 @@ namespace Hanseithon.Gameplay
             originalConstraints = body.constraints;
             originalGravityScale = body.gravityScale;
             originalLinearDamping = body.linearDamping;
+            originalLayer = gameObject.layer;
             originalScale = transform.localScale;
             ignoredCarrierCollider = carrierCollider;
 
             IsHeld = true;
+            gameObject.layer = LayerMask.NameToLayer(HeldLayerName);
             body.bodyType = RigidbodyType2D.Kinematic;
             body.gravityScale = 0f;
             body.linearDamping = 0f;
@@ -92,6 +97,7 @@ namespace Hanseithon.Gameplay
             }
 
             ignoredCarrierCollider = null;
+            gameObject.layer = originalLayer;
             body.bodyType = originalBodyType;
             body.gravityScale = originalGravityScale;
             body.linearDamping = originalLinearDamping;
