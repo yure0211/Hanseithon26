@@ -23,6 +23,7 @@ namespace Hanseithon.DualPlaySample
         [Header("Scene flow")]
         [SerializeField] private string mainMenuSceneName = "MainMenuScene";
         [SerializeField] private string connectionSceneName = "DualPlayConnectionTestScene";
+        [SerializeField] private string levelSceneName = "Level";
         [SerializeField] private string gameplaySceneName = "InGame";
         [SerializeField] private bool autoStartGameWhenFull = true;
         [SerializeField, Min(0f)] private float autoStartDelay = 1f;
@@ -35,6 +36,7 @@ namespace Hanseithon.DualPlaySample
         public bool RememberLastAddress => rememberLastAddress;
         public string MainMenuSceneName => NormalizeSceneName(mainMenuSceneName, "MainMenuScene");
         public string ConnectionSceneName => NormalizeSceneName(connectionSceneName, "DualPlayConnectionTestScene");
+        public string LevelSceneName => NormalizeSceneName(levelSceneName, "Level");
         public string GameplaySceneName => NormalizeSceneName(gameplaySceneName, "InGame");
         public bool AutoStartGameWhenFull => autoStartGameWhenFull;
         public float AutoStartDelay => Mathf.Max(0f, autoStartDelay);
@@ -85,6 +87,7 @@ namespace Hanseithon.DualPlaySample
             maximumPlayers = Mathf.Max(2, maximumPlayers);
             mainMenuSceneName = NormalizeSceneName(mainMenuSceneName, "MainMenuScene");
             connectionSceneName = NormalizeSceneName(connectionSceneName, "DualPlayConnectionTestScene");
+            levelSceneName = NormalizeSceneName(levelSceneName, "Level");
             gameplaySceneName = NormalizeSceneName(gameplaySceneName, "InGame");
             autoStartDelay = Mathf.Max(0f, autoStartDelay);
         }

@@ -46,7 +46,7 @@ namespace Hanseithon.DualPlaySample
             GUILayout.Label("Two-player cooperative prototype", subtitleStyle);
             GUILayout.Space(28f);
             GUILayout.Label("Host always plays Turtle. Client always plays Bunny.", subtitleStyle);
-            GUILayout.Label("Both players connect in the lobby before InGame starts.", subtitleStyle);
+            GUILayout.Label("Both players connect in the lobby before level selection starts.", subtitleStyle);
             GUILayout.Space(24f);
 
             if (GUILayout.Button("Enter Connection Lobby", GUILayout.Height(52f)))

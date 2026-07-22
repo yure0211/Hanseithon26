@@ -147,7 +147,9 @@ namespace Hanseithon.DualPlaySample
             {
                 DrawLobbyGui();
             }
-            else if (activeScene == connectionSettings.GameplaySceneName && networkManager.IsListening)
+            else if ((activeScene == connectionSettings.LevelSceneName ||
+                      activeScene == connectionSettings.GameplaySceneName) &&
+                     networkManager.IsListening)
             {
                 DrawGameplayHud();
             }
@@ -191,7 +193,7 @@ namespace Hanseithon.DualPlaySample
             GUILayout.Label(GetSessionSummary(), wrappedLabelStyle);
             GUILayout.Label(statusMessage, wrappedLabelStyle);
             GUILayout.Space(8f);
-            GUILayout.Label("The Host starts InGame automatically after both players connect.", wrappedLabelStyle);
+            GUILayout.Label($"The Host opens {connectionSettings.LevelSceneName} after both players connect.", wrappedLabelStyle);
             GUILayout.Label($"Last saved selection: {connectionSettings.LastSelectedMode}", wrappedLabelStyle);
             GUILayout.EndArea();
         }
@@ -331,7 +333,9 @@ namespace Hanseithon.DualPlaySample
                     ? "Disconnected from host."
                     : networkManager.DisconnectReason;
 
-                if (SceneManager.GetActiveScene().name == connectionSettings.GameplaySceneName)
+                string activeScene = SceneManager.GetActiveScene().name;
+                if (activeScene == connectionSettings.LevelSceneName ||
+                    activeScene == connectionSettings.GameplaySceneName)
                 {
                     StartCoroutine(ReturnToMainMenuAfterDisconnect());
                 }
@@ -354,7 +358,7 @@ namespace Hanseithon.DualPlaySample
         private IEnumerator StartGameAfterDelay()
         {
             isStartingGame = true;
-            statusMessage = "Both players are ready. Loading InGame...";
+            statusMessage = $"Both players are ready. Loading {connectionSettings.LevelSceneName}...";
             yield return new WaitForSecondsRealtime(connectionSettings.AutoStartDelay);
 
             if (!networkManager.IsHost ||
@@ -365,13 +369,13 @@ namespace Hanseithon.DualPlaySample
             }
 
             SceneEventProgressStatus result = networkManager.SceneManager.LoadScene(
-                connectionSettings.GameplaySceneName,
+                connectionSettings.LevelSceneName,
                 LoadSceneMode.Single);
 
             if (result != SceneEventProgressStatus.Started)
             {
                 isStartingGame = false;
-                statusMessage = $"InGame scene load failed: {result}";
+                statusMessage = $"{connectionSettings.LevelSceneName} scene load failed: {result}";
                 Debug.LogError(statusMessage, this);
             }
         }

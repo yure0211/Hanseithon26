@@ -16,12 +16,18 @@ public sealed class BunnyController : MonoBehaviour
     private bool jumpQueued;
     private bool jumpHeld;
     private bool isGrounded;
+    public Vector2 velocity;
 
     private void Awake()
     {
         if (body == null)
         {
             body = GetComponent<Rigidbody2D>();
+        }
+
+        if (animator == null)
+        {
+            animator = GetComponent<Animator>();
         }
     }
 
@@ -74,6 +80,11 @@ public sealed class BunnyController : MonoBehaviour
         if (jumpQueued && isGrounded)
         {
             body.AddForceY(jumpForce, ForceMode2D.Impulse);
+
+            if (animator != null)
+            {
+                animator.SetTrigger("Jump");
+            }
         }
         jumpQueued = false;
 
@@ -81,6 +92,23 @@ public sealed class BunnyController : MonoBehaviour
         {
             body.AddForceY(jumpForce * jumpHoldForceRatio, ForceMode2D.Force);
         }
+
+        velocity = body.linearVelocity;
+        UpdateAnimatorState();
+    }
+
+    private void UpdateAnimatorState()
+    {
+        if (animator == null) return;
+        bool a = Mathf.Abs(velocity.x) > 0.01f;
+        if (a)
+        {
+            transform.localScale = new Vector3(horizontalMove, 1f, 1f); 
+            
+        }
+        animator.SetBool("IsRun",a);
+        animator.SetBool("IsGround", isGrounded);
+        animator.SetFloat("YVelocity", velocity.y);
     }
 
     private void OnDrawGizmosSelected()
