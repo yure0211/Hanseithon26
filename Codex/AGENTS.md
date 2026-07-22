@@ -18,8 +18,8 @@
 ## 3. 작업 기록 규칙
 
 - Codex가 저장소를 변경한 매 작업마다 `Codex/WorkLogs/` 아래에 작업 기록 Markdown 파일을 만든다.
-- 모든 작업 기록의 파일명에는 대소문자를 그대로 지킨 `Leewonwoo`를 반드시 포함한다.
-- 권장 파일명 형식은 `YYYY-MM-DD_HHMM_Leewonwoo_<작업명>.md`다.
+- 모든 작업 기록의 파일명에는 대소문자를 그대로 지킨 `Leewonwoo`나 'Kimdawon'를 반드시 포함한다.
+- 권장 파일명 형식은 `YYYY-MM-DD_HHMM_<Leewonwoo/Kimdawon>_<작업명>.md`다.
 - 같은 분에 파일명이 겹치면 뒤에 `-02`, `-03`처럼 순번을 붙인다.
 - 작업 기록에는 최소한 다음 내용을 남긴다.
   - 작업 목적
