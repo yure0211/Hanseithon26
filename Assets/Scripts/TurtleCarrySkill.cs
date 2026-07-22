@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
+using Hanseithon.UI;
 
 namespace Hanseithon.Gameplay
 {
@@ -116,7 +117,12 @@ namespace Hanseithon.Gameplay
             }
 
             string action = heldBox == null ? "가까운 상자 들기" : "상자 내려놓기";
-            GUI.Box(new Rect(16f, Screen.height - 62f, 270f, 46f), $"거북이 스킬: {interactionKey} - {action}");
+            Matrix4x4 previousMatrix = DualPlayUiTheme.BeginCanvas(false);
+            GUI.Label(
+                new Rect(20f, DualPlayUiTheme.VirtualHeight - 70f, 340f, 50f),
+                $"거북이 스킬  ·  {interactionKey}  ·  {action}",
+                DualPlayUiTheme.HintStyle);
+            DualPlayUiTheme.EndCanvas(previousMatrix);
         }
 
         private void OnDrawGizmosSelected()
