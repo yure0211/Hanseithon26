@@ -391,6 +391,22 @@ namespace Hanseithon.DualPlaySample
             }
         }
 
+        private void HandleAnimationStateChanged(int previousStateHash, int newStateHash)
+        {
+            if (!IsOwner)
+            {
+                ApplyAnimationState(newStateHash);
+            }
+        }
+
+        private void HandleFacingChanged(bool previousFacingLeft, bool newFacingLeft)
+        {
+            if (!IsOwner)
+            {
+                playerRenderer.flipX = newFacingLeft;
+            }
+        }
+
         private void HandleActiveSceneChanged(Scene previousScene, Scene newScene)
         {
             placedInGameplay = false;
