@@ -1,6 +1,8 @@
+using System.Collections;
 using Unity.Netcode;
 using Unity.Netcode.Transports.UTP;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace Hanseithon.DualPlaySample
 {
@@ -18,6 +20,7 @@ namespace Hanseithon.DualPlaySample
         private string address;
         private string statusMessage = "Choose Host or Client.";
         private bool isPrimaryInstance = true;
+        private bool isStartingGame;
         private GUIStyle headerStyle;
         private GUIStyle wrappedLabelStyle;
 
@@ -72,6 +75,39 @@ namespace Hanseithon.DualPlaySample
             networkManager.OnClientDisconnectCallback += HandleClientDisconnected;
         }
 
+        private void Start()
+        {
+            string[] arguments = System.Environment.GetCommandLineArgs();
+            bool startAsHost = false;
+            bool startAsClient = false;
+
+            for (int i = 0; i < arguments.Length; i++)
+            {
+                string argument = arguments[i];
+                if (argument == "-dualPlayHost")
+                {
+                    startAsHost = true;
+                }
+                else if (argument == "-dualPlayClient")
+                {
+                    startAsClient = true;
+                }
+                else if (argument.StartsWith("-dualPlayAddress="))
+                {
+                    address = argument.Substring("-dualPlayAddress=".Length);
+                }
+            }
+
+            if (startAsHost)
+            {
+                StartHost();
+            }
+            else if (startAsClient)
+            {
+                StartClient();
+            }
+        }
+
         private void OnDisable()
         {
             if (!isPrimaryInstance || networkManager == null)
@@ -106,11 +142,26 @@ namespace Hanseithon.DualPlaySample
                 return;
             }
 
+            string activeScene = SceneManager.GetActiveScene().name;
+            if (activeScene == connectionSettings.ConnectionSceneName)
+            {
+                DrawLobbyGui();
+            }
+            else if (activeScene == connectionSettings.GameplaySceneName && networkManager.IsListening)
+            {
+                DrawGameplayHud();
+            }
+        }
+
+        private void DrawLobbyGui()
+        {
             EnsureGuiStyles();
 
-            GUILayout.BeginArea(new Rect(20f, 20f, 390f, 310f), GUI.skin.box);
-            GUILayout.Label("Dual Play Network Sample", headerStyle);
+            float width = Mathf.Min(430f, Screen.width - 40f);
+            GUILayout.BeginArea(new Rect(20f, 20f, width, 360f), GUI.skin.box);
+            GUILayout.Label("Dual Play Connection Lobby", headerStyle);
             GUILayout.Space(6f);
+            GUILayout.Label("Host = Turtle / Client = Bunny", wrappedLabelStyle);
             GUILayout.Label("Host address", wrappedLabelStyle);
 
             GUI.enabled = !networkManager.IsListening;
@@ -119,11 +170,11 @@ namespace Hanseithon.DualPlaySample
             GUILayout.Space(4f);
 
             GUILayout.BeginHorizontal();
-            if (GUILayout.Button("Start Host", GUILayout.Height(36f)))
+            if (GUILayout.Button("Start Host (Turtle)", GUILayout.Height(40f)))
             {
                 StartHost();
             }
-            if (GUILayout.Button("Start Client", GUILayout.Height(36f)))
+            if (GUILayout.Button("Start Client (Bunny)", GUILayout.Height(40f)))
             {
                 StartClient();
             }
@@ -140,13 +191,28 @@ namespace Hanseithon.DualPlaySample
             GUILayout.Label(GetSessionSummary(), wrappedLabelStyle);
             GUILayout.Label(statusMessage, wrappedLabelStyle);
             GUILayout.Space(8f);
-            GUILayout.Label("Move your own square with WASD or arrow keys. Run one build as Host and another as Client.", wrappedLabelStyle);
+            GUILayout.Label("The Host starts InGame automatically after both players connect.", wrappedLabelStyle);
+            GUILayout.Label($"Last saved selection: {connectionSettings.LastSelectedMode}", wrappedLabelStyle);
+            GUILayout.EndArea();
+        }
+
+        private void DrawGameplayHud()
+        {
+            EnsureGuiStyles();
+
+            GUILayout.BeginArea(new Rect(16f, 16f, 280f, 130f), GUI.skin.box);
+            GUILayout.Label($"Role: {DualPlayNetworkPlayer.LocalRoleName}", headerStyle);
+            GUILayout.Label(GetSessionSummary(), wrappedLabelStyle);
+            if (GUILayout.Button("Disconnect & Main Menu", GUILayout.Height(28f)))
+            {
+                DisconnectAndReturnToMainMenu();
+            }
             GUILayout.EndArea();
         }
 
         private void StartHost()
         {
-            connectionSettings.SaveAddress(address);
+            connectionSettings.SaveSessionSelection(address, true);
 
             if (!PrepareNetwork(true))
             {
@@ -154,13 +220,13 @@ namespace Hanseithon.DualPlaySample
             }
 
             statusMessage = networkManager.StartHost()
-                ? "Host started. Waiting for one client..."
+                ? "Host started as Turtle. Waiting for Bunny..."
                 : "Host could not start. Check the Console.";
         }
 
         private void StartClient()
         {
-            connectionSettings.SaveAddress(address);
+            connectionSettings.SaveSessionSelection(address, false);
 
             if (!PrepareNetwork(false))
             {
@@ -168,7 +234,7 @@ namespace Hanseithon.DualPlaySample
             }
 
             statusMessage = networkManager.StartClient()
-                ? $"Connecting to {address}:{connectionSettings.Port}..."
+                ? $"Connecting Bunny to {address}:{connectionSettings.Port}..."
                 : "Client could not start. Check the address and Console.";
         }
 
@@ -178,6 +244,7 @@ namespace Hanseithon.DualPlaySample
             {
                 return false;
             }
+
             GameObject playerPrefab = connectionSettings.PlayerPrefab;
             if (playerPrefab == null)
             {
@@ -190,6 +257,7 @@ namespace Hanseithon.DualPlaySample
             networkManager.NetworkConfig.PlayerPrefab = playerPrefab;
             networkManager.ConnectionApprovalCallback = ApproveConnection;
             transport.SetConnectionData(address, connectionSettings.Port, isHost ? "0.0.0.0" : null);
+            isStartingGame = false;
             return true;
         }
 
@@ -200,7 +268,7 @@ namespace Hanseithon.DualPlaySample
             response.Approved = hasRoom;
             response.CreatePlayerObject = hasRoom;
             response.Pending = false;
-            response.Reason = hasRoom ? string.Empty : "This sample supports exactly two players.";
+            response.Reason = hasRoom ? string.Empty : "This game supports exactly two players.";
             response.Position = request.ClientNetworkId == NetworkManager.ServerClientId
                 ? new Vector3(-2.5f, 0f, 0f)
                 : new Vector3(2.5f, 0f, 0f);
@@ -209,6 +277,8 @@ namespace Hanseithon.DualPlaySample
 
         private void Disconnect()
         {
+            StopAllCoroutines();
+            isStartingGame = false;
             if (networkManager.IsListening)
             {
                 networkManager.Shutdown();
@@ -217,20 +287,40 @@ namespace Hanseithon.DualPlaySample
             statusMessage = "Disconnected.";
         }
 
+        private void DisconnectAndReturnToMainMenu()
+        {
+            Disconnect();
+            string menuScene = connectionSettings.MainMenuSceneName;
+            if (persistentInstance == this)
+            {
+                persistentInstance = null;
+            }
+            Destroy(gameObject);
+            SceneManager.LoadScene(menuScene, LoadSceneMode.Single);
+        }
+
         private void HandleClientConnected(ulong clientId)
         {
             if (networkManager.IsServer)
             {
-                statusMessage = $"Player connected ({networkManager.ConnectedClientsIds.Count}/{connectionSettings.MaximumPlayers}).";
+                int playerCount = networkManager.ConnectedClientsIds.Count;
+                statusMessage = $"Player connected ({playerCount}/{connectionSettings.MaximumPlayers}).";
+                if (connectionSettings.AutoStartGameWhenFull &&
+                    playerCount >= connectionSettings.MaximumPlayers &&
+                    !isStartingGame)
+                {
+                    StartCoroutine(StartGameAfterDelay());
+                }
             }
             else if (clientId == networkManager.LocalClientId)
             {
-                statusMessage = $"Connected as client {clientId}.";
+                statusMessage = "Connected as Bunny. Waiting for the Host...";
             }
         }
 
         private void HandleClientDisconnected(ulong clientId)
         {
+            isStartingGame = false;
             if (networkManager.IsServer)
             {
                 statusMessage = $"Player disconnected ({networkManager.ConnectedClientsIds.Count}/{connectionSettings.MaximumPlayers}).";
@@ -240,6 +330,49 @@ namespace Hanseithon.DualPlaySample
                 statusMessage = string.IsNullOrWhiteSpace(networkManager.DisconnectReason)
                     ? "Disconnected from host."
                     : networkManager.DisconnectReason;
+
+                if (SceneManager.GetActiveScene().name == connectionSettings.GameplaySceneName)
+                {
+                    StartCoroutine(ReturnToMainMenuAfterDisconnect());
+                }
+            }
+        }
+
+        private IEnumerator ReturnToMainMenuAfterDisconnect()
+        {
+            yield return null;
+
+            string menuScene = connectionSettings.MainMenuSceneName;
+            if (persistentInstance == this)
+            {
+                persistentInstance = null;
+            }
+            Destroy(gameObject);
+            SceneManager.LoadScene(menuScene, LoadSceneMode.Single);
+        }
+
+        private IEnumerator StartGameAfterDelay()
+        {
+            isStartingGame = true;
+            statusMessage = "Both players are ready. Loading InGame...";
+            yield return new WaitForSecondsRealtime(connectionSettings.AutoStartDelay);
+
+            if (!networkManager.IsHost ||
+                networkManager.ConnectedClientsIds.Count < connectionSettings.MaximumPlayers)
+            {
+                isStartingGame = false;
+                yield break;
+            }
+
+            SceneEventProgressStatus result = networkManager.SceneManager.LoadScene(
+                connectionSettings.GameplaySceneName,
+                LoadSceneMode.Single);
+
+            if (result != SceneEventProgressStatus.Started)
+            {
+                isStartingGame = false;
+                statusMessage = $"InGame scene load failed: {result}";
+                Debug.LogError(statusMessage, this);
             }
         }
 
@@ -251,11 +384,11 @@ namespace Hanseithon.DualPlaySample
             }
             if (networkManager.IsHost)
             {
-                return $"Mode: Host | Players: {networkManager.ConnectedClientsIds.Count}/{connectionSettings.MaximumPlayers}";
+                return $"Mode: Host-Turtle | Players: {networkManager.ConnectedClientsIds.Count}/{connectionSettings.MaximumPlayers}";
             }
             if (networkManager.IsClient)
             {
-                return $"Mode: Client | Local ID: {networkManager.LocalClientId}";
+                return $"Mode: Client-Bunny | Local ID: {networkManager.LocalClientId}";
             }
 
             return "Mode: Server";

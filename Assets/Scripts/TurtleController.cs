@@ -1,47 +1,65 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
 
-public class TurtleController : MonoBehaviour
+public sealed class TurtleController : MonoBehaviour
 {
-    [SerializeField] Rigidbody2D _rb;
-    [SerializeField] Animator _animator;
+    [SerializeField] private Rigidbody2D body;
+    [SerializeField] private float moveForce = 5f;
+    [SerializeField] private float maximumSpeed = 4f;
 
-    [SerializeField] InputAction movement;
-
-    private Vector2 move;
-    [SerializeField] float moveForce;
-
-    private void OnEnable()
-    {
-        movement.Enable();
-
-    }
-    private void OnDisable()
-    {
-        movement.Disable();
-    }
+    private Vector2 movement;
 
     private void Awake()
     {
-        _rb = GetComponent<Rigidbody2D>();
-        _animator = GetComponent<Animator>();
-
+        if (body == null)
+        {
+            body = GetComponent<Rigidbody2D>();
+        }
     }
 
-    void Update()
+    private void OnDisable()
     {
-        GetInput();
+        movement = Vector2.zero;
+    }
+
+    private void Update()
+    {
+        Keyboard keyboard = Keyboard.current;
+        if (keyboard == null)
+        {
+            movement = Vector2.zero;
+            return;
+        }
+
+        movement = Vector2.zero;
+        if (keyboard.aKey.isPressed || keyboard.leftArrowKey.isPressed)
+        {
+            movement.x -= 1f;
+        }
+        if (keyboard.dKey.isPressed || keyboard.rightArrowKey.isPressed)
+        {
+            movement.x += 1f;
+        }
+        if (keyboard.sKey.isPressed || keyboard.downArrowKey.isPressed)
+        {
+            movement.y -= 1f;
+        }
+        if (keyboard.wKey.isPressed || keyboard.upArrowKey.isPressed)
+        {
+            movement.y += 1f;
+        }
+
+        movement = Vector2.ClampMagnitude(movement, 1f);
     }
 
     private void FixedUpdate()
     {
-        _rb.AddForce(move * moveForce, ForceMode2D.Force);
+        if (body == null)
+        {
+            return;
+        }
+
+        body.AddForce(movement * moveForce, ForceMode2D.Force);
+        body.linearVelocity = Vector2.ClampMagnitude(body.linearVelocity, maximumSpeed);
     }
-
-    private void GetInput()
-    {
-        move = movement.ReadValue<Vector2>();
-    }
-
-
 }

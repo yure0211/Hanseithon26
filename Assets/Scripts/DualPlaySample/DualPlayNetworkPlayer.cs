@@ -1,6 +1,6 @@
 using Unity.Netcode;
 using UnityEngine;
-using UnityEngine.InputSystem;
+using UnityEngine.SceneManagement;
 
 namespace Hanseithon.DualPlaySample
 {
@@ -8,13 +8,36 @@ namespace Hanseithon.DualPlaySample
     [RequireComponent(typeof(SpriteRenderer))]
     public sealed class DualPlayNetworkPlayer : NetworkBehaviour
     {
-        [SerializeField] private float moveSpeed = 4.5f;
-        [SerializeField] private Vector2 minimumBounds = new Vector2(-5f, -3f);
-        [SerializeField] private Vector2 maximumBounds = new Vector2(5f, 3.2f);
+        public enum PlayerRole : byte
+        {
+            Turtle,
+            Bunny
+        }
+
+        [SerializeField] private string gameplaySceneName = "InGame";
+        [SerializeField] private Vector2 turtleSpawnPosition = new Vector2(-2.5f, -0.8f);
+        [SerializeField] private Vector2 bunnySpawnPosition = new Vector2(2.5f, -1.8f);
         [SerializeField] private SpriteRenderer playerRenderer;
 
-        private static readonly Color HostColor = new Color(1f, 0.45f, 0.23f, 1f);
-        private static readonly Color ClientColor = new Color(0.2f, 0.85f, 0.72f, 1f);
+        private readonly NetworkVariable<PlayerRole> role = new NetworkVariable<PlayerRole>(
+            PlayerRole.Turtle,
+            NetworkVariableReadPermission.Everyone,
+            NetworkVariableWritePermission.Server);
+
+        private static bool hasLocalRole;
+        private static PlayerRole localRole;
+
+        private Rigidbody2D body;
+        private BoxCollider2D bodyCollider;
+        private BunnyController bunnyController;
+        private TurtleController turtleController;
+        private bool placedInGameplay;
+
+        private static readonly Color TurtleColor = new Color(0.28f, 0.72f, 0.4f, 1f);
+        private static readonly Color BunnyColor = new Color(0.95f, 0.62f, 0.3f, 1f);
+
+        public static string LocalRoleName => hasLocalRole ? localRole.ToString() : "Connecting";
+        public PlayerRole Role => role.Value;
 
         private void Awake()
         {
@@ -22,64 +45,142 @@ namespace Hanseithon.DualPlaySample
             {
                 playerRenderer = GetComponent<SpriteRenderer>();
             }
+            if (playerRenderer.sprite == null)
+            {
+                playerRenderer.sprite = DualPlayRuntimeSprite.Get();
+            }
 
-            playerRenderer.sprite = DualPlayRuntimeSprite.Get();
-            playerRenderer.color = Color.gray;
             playerRenderer.sortingOrder = 10;
-            transform.localScale = Vector3.one * 0.8f;
+
+            body = GetComponent<Rigidbody2D>();
+            if (body == null)
+            {
+                body = gameObject.AddComponent<Rigidbody2D>();
+            }
+
+            bodyCollider = GetComponent<BoxCollider2D>();
+            if (bodyCollider == null)
+            {
+                bodyCollider = gameObject.AddComponent<BoxCollider2D>();
+            }
+            bodyCollider.size = Vector2.one;
+
+            bunnyController = GetComponent<BunnyController>();
+            if (bunnyController == null)
+            {
+                bunnyController = gameObject.AddComponent<BunnyController>();
+            }
+
+            turtleController = GetComponent<TurtleController>();
+            if (turtleController == null)
+            {
+                turtleController = gameObject.AddComponent<TurtleController>();
+            }
+
+            bunnyController.enabled = false;
+            turtleController.enabled = false;
+            body.simulated = false;
+            bodyCollider.enabled = false;
         }
 
         public override void OnNetworkSpawn()
         {
             base.OnNetworkSpawn();
-            playerRenderer.color = OwnerClientId == NetworkManager.ServerClientId ? HostColor : ClientColor;
-            gameObject.name = $"NetworkPlayer_{OwnerClientId}";
+
+            role.OnValueChanged += HandleRoleChanged;
+            SceneManager.activeSceneChanged += HandleActiveSceneChanged;
+
+            if (IsServer)
+            {
+                role.Value = OwnerClientId == NetworkManager.ServerClientId
+                    ? PlayerRole.Turtle
+                    : PlayerRole.Bunny;
+            }
+
+            if (IsOwner)
+            {
+                hasLocalRole = true;
+                localRole = role.Value;
+            }
+
+            ConfigureRoleAndScene();
         }
 
-        private void Update()
+        public override void OnNetworkDespawn()
         {
-            if (!IsSpawned || !IsOwner || Keyboard.current == null)
+            role.OnValueChanged -= HandleRoleChanged;
+            SceneManager.activeSceneChanged -= HandleActiveSceneChanged;
+
+            if (IsOwner)
             {
+                hasLocalRole = false;
+            }
+
+            bunnyController.enabled = false;
+            turtleController.enabled = false;
+            base.OnNetworkDespawn();
+        }
+
+        private void HandleRoleChanged(PlayerRole previousRole, PlayerRole newRole)
+        {
+            if (IsOwner)
+            {
+                localRole = newRole;
+            }
+
+            ConfigureRoleAndScene();
+        }
+
+        private void HandleActiveSceneChanged(Scene previousScene, Scene newScene)
+        {
+            placedInGameplay = false;
+            ConfigureRoleAndScene();
+        }
+
+        private void ConfigureRoleAndScene()
+        {
+            PlayerRole currentRole = role.Value;
+            bool isGameplay = SceneManager.GetActiveScene().name == gameplaySceneName;
+            bool controlsEnabled = IsSpawned && IsOwner && isGameplay;
+
+            playerRenderer.color = currentRole == PlayerRole.Turtle ? TurtleColor : BunnyColor;
+            transform.localScale = currentRole == PlayerRole.Turtle
+                ? new Vector3(1.15f, 0.8f, 1f)
+                : new Vector3(0.8f, 1.1f, 1f);
+            gameObject.name = currentRole == PlayerRole.Turtle ? "NetworkTurtle" : "NetworkBunny";
+
+            bunnyController.enabled = controlsEnabled && currentRole == PlayerRole.Bunny;
+            turtleController.enabled = controlsEnabled && currentRole == PlayerRole.Turtle;
+            body.simulated = controlsEnabled;
+            bodyCollider.enabled = controlsEnabled;
+            body.constraints = RigidbodyConstraints2D.FreezeRotation;
+
+            if (!isGameplay)
+            {
+                body.linearVelocity = Vector2.zero;
                 return;
             }
 
-            Vector2 input = ReadMovementInput();
-            if (input.sqrMagnitude > 1f)
+            if (currentRole == PlayerRole.Turtle)
             {
-                input.Normalize();
+                body.gravityScale = 0f;
+                body.linearDamping = 0.5f;
+            }
+            else
+            {
+                body.gravityScale = 1f;
+                body.linearDamping = 0f;
             }
 
-            Vector3 nextPosition = transform.position + (Vector3)(input * moveSpeed * Time.deltaTime);
-            nextPosition.x = Mathf.Clamp(nextPosition.x, minimumBounds.x, maximumBounds.x);
-            nextPosition.y = Mathf.Clamp(nextPosition.y, minimumBounds.y, maximumBounds.y);
-            nextPosition.z = 0f;
-            transform.position = nextPosition;
-        }
-
-        private static Vector2 ReadMovementInput()
-        {
-            Keyboard keyboard = Keyboard.current;
-            float horizontal = 0f;
-            float vertical = 0f;
-
-            if (keyboard.aKey.isPressed || keyboard.leftArrowKey.isPressed)
+            if (controlsEnabled && !placedInGameplay)
             {
-                horizontal -= 1f;
+                Vector2 spawnPosition = currentRole == PlayerRole.Turtle
+                    ? turtleSpawnPosition
+                    : bunnySpawnPosition;
+                body.position = spawnPosition;
+                body.linearVelocity = Vector2.zero;
+                placedInGameplay = true;
             }
-            if (keyboard.dKey.isPressed || keyboard.rightArrowKey.isPressed)
-            {
-                horizontal += 1f;
-            }
-            if (keyboard.sKey.isPressed || keyboard.downArrowKey.isPressed)
-            {
-                vertical -= 1f;
-            }
-            if (keyboard.wKey.isPressed || keyboard.upArrowKey.isPressed)
-            {
-                vertical += 1f;
-            }
-
-            return new Vector2(horizontal, vertical);
         }
     }
 }

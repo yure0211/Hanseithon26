@@ -1,99 +1,90 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
 
-public class BunnyController : MonoBehaviour
+public sealed class BunnyController : MonoBehaviour
 {
-    [SerializeField] InputAction movement;
-    [SerializeField] InputAction jump;
+    [SerializeField] private Rigidbody2D body;
+    [SerializeField] private float moveSpeed = 5f;
+    [SerializeField] private float jumpForce = 7f;
+    [SerializeField] private float jumpHoldForceRatio = 0.67f;
+    [SerializeField] private LayerMask groundLayer = 1 << 6;
+    [SerializeField] private Vector3 groundPosition = new Vector3(0f, -0.5f, 0f);
+    [SerializeField] private Vector3 groundSize = new Vector3(0.7f, 0.3f, 0f);
 
-    private float _horizontalMove;
-    private bool _isJumpPress;
-    private bool _isJumpHold;
-
-    [SerializeField] Rigidbody2D _rb;
-    [SerializeField] Animator _animator;
-
-    [SerializeField] float _speed;
-    public float _Yvelocity;
-    [SerializeField] float jumpForce;
-
-    public bool isGround;
-    [SerializeField] LayerMask groundLayer;
-    [SerializeField] Vector3 groundPosition;
-    [SerializeField] Vector3 groundSize;
+    private float horizontalMove;
+    private bool jumpQueued;
+    private bool jumpHeld;
+    private bool isGrounded;
 
     private void Awake()
     {
-        _rb = GetComponent<Rigidbody2D>();
-        _animator = GetComponent<Animator>();
-    }
-
-    private void OnEnable()
-    {
-        movement.Enable();
-        jump.Enable();
+        if (body == null)
+        {
+            body = GetComponent<Rigidbody2D>();
+        }
     }
 
     private void OnDisable()
     {
-        movement.Disable();
-        jump.Disable();
+        horizontalMove = 0f;
+        jumpQueued = false;
+        jumpHeld = false;
     }
 
-    void Update()
+    private void Update()
     {
-        GetInput();
+        Keyboard keyboard = Keyboard.current;
+        if (keyboard == null)
+        {
+            horizontalMove = 0f;
+            jumpHeld = false;
+            return;
+        }
 
-        JumpTrigg();
+        horizontalMove = 0f;
+        if (keyboard.aKey.isPressed || keyboard.leftArrowKey.isPressed)
+        {
+            horizontalMove -= 1f;
+        }
+        if (keyboard.dKey.isPressed || keyboard.rightArrowKey.isPressed)
+        {
+            horizontalMove += 1f;
+        }
+
+        jumpQueued |= keyboard.spaceKey.wasPressedThisFrame;
+        jumpHeld = keyboard.spaceKey.isPressed;
     }
+
     private void FixedUpdate()
     {
-        _Yvelocity = _rb.linearVelocity.y;
-        isGround = IsGround();
-        MoveX();
-        JumpHold();
+        if (body == null)
+        {
+            return;
+        }
 
+        isGrounded = Physics2D.OverlapBox(
+            transform.position + groundPosition,
+            groundSize,
+            0f,
+            groundLayer) != null;
+
+        body.linearVelocityX = moveSpeed * horizontalMove;
+
+        if (jumpQueued && isGrounded)
+        {
+            body.AddForceY(jumpForce, ForceMode2D.Impulse);
+        }
+        jumpQueued = false;
+
+        if (jumpHeld && !isGrounded && body.linearVelocityY > 0f)
+        {
+            body.AddForceY(jumpForce * jumpHoldForceRatio, ForceMode2D.Force);
+        }
     }
 
-    private void GetInput()
-    {
-        _horizontalMove = movement.ReadValue<float>();
-        _isJumpPress = jump.WasPressedThisFrame();
-        _isJumpHold = jump.IsPressed();
-    }
-
-    private void JumpTrigg()
-    {
-        if (!_isJumpPress) return;
-        if (!isGround) return;
-        _rb.AddForceY(jumpForce, ForceMode2D.Impulse);
-
-    }
-
-    private void JumpHold()
-    {
-        if(!_isJumpHold) return;
-        if (_Yvelocity < 0) return;
-        if (isGround) return;
-        _rb.AddForceY(jumpForce * 2/3, ForceMode2D.Force);
-    }
-
-    private void MoveX()
-    {
-        _rb.linearVelocityX = _speed * _horizontalMove;
-    }
-
-    private bool IsGround()
-    {
-        bool g = Physics2D.OverlapBox(groundPosition + transform.position, groundSize,0,groundLayer);
-        return g;
-    }
-    
-
-    private void OnDrawGizmos()
+    private void OnDrawGizmosSelected()
     {
         Gizmos.color = Color.green;
-        Gizmos.DrawWireCube(groundPosition, groundSize);
-
+        Gizmos.DrawWireCube(transform.position + groundPosition, groundSize);
     }
 }

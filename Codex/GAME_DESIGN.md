@@ -153,3 +153,11 @@
 4. 시점 전환 조작과 슬로 모션 수치를 프로토타입으로 검증한다.
 5. 데모에 넣을 이로운 효과와 역경을 각각 1종씩 선정한다.
 6. 역할 분담과 씬·프리팹 작업 충돌 방지 방식을 합의한다.
+
+## 12. 확정된 네트워크 플레이 흐름
+
+- 해커톤 데모는 Unity Netcode for GameObjects와 Unity Transport를 사용하는 2인 네트워크 플레이로 진행한다.
+- Host 플레이어는 거북이, Client 플레이어는 토끼를 고정으로 담당한다.
+- 기본 씬 흐름은 `MainMenuScene` → `DualPlayConnectionTestScene` → `InGame`이다.
+- 연결 테스트 씬에서 Host와 Client가 모두 접속하면 Host가 NGO 씬 전환을 실행하며, 두 실행 인스턴스가 연결을 유지한 채 `InGame`으로 함께 이동한다.
+- 마지막 Host 주소와 선택한 접속 역할은 로컬 설정에 저장한다.

@@ -224,62 +224,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 389792f43df285840ba071b59c3711db, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BunnyController
-  movement:
-    m_Name: Movement
-    m_Type: 0
-    m_ExpectedControlType: 
-    m_Id: 363d22a3-4a78-4c78-9467-e814cd309abc
-    m_Processors: 
-    m_Interactions: 
-    m_SingletonActionBindings:
-    - m_Name: 1D Axis
-      m_Id: cb2dc77e-0f8e-41c5-93b4-2182627db3de
-      m_Path: 1DAxis
-      m_Interactions: 
-      m_Processors: 
-      m_Groups: 
-      m_Action: Movement
-      m_Flags: 4
-    - m_Name: negative
-      m_Id: 8670e8e7-f969-4108-9337-346cbe6520ad
-      m_Path: <Keyboard>/a
-      m_Interactions: 
-      m_Processors: 
-      m_Groups: 
-      m_Action: Movement
-      m_Flags: 8
-    - m_Name: positive
-      m_Id: bc078b06-5489-45ff-8908-6622f147cecb
-      m_Path: <Keyboard>/d
-      m_Interactions: 
-      m_Processors: 
-      m_Groups: 
-      m_Action: Movement
-      m_Flags: 8
-    m_Flags: 0
-  jump:
-    m_Name: Jump
-    m_Type: 0
-    m_ExpectedControlType: 
-    m_Id: 8e782ce1-d3cf-4b44-bb95-48a3674ce4e7
-    m_Processors: 
-    m_Interactions: 
-    m_SingletonActionBindings:
-    - m_Name: 
-      m_Id: 4f7f1168-5d83-45f2-a9d9-0aa636bce3b1
-      m_Path: <Keyboard>/space
-      m_Interactions: 
-      m_Processors: 
-      m_Groups: 
-      m_Action: Jump
-      m_Flags: 0
-    m_Flags: 0
-  _rb: {fileID: 0}
-  _animator: {fileID: 0}
-  _speed: 5
-  _Yvelocity: 0
+  body: {fileID: 0}
+  moveSpeed: 5
   jumpForce: 7
-  isGround: 0
+  jumpHoldForceRatio: 0.67
   groundLayer:
     serializedVersion: 2
     m_Bits: 64
@@ -378,7 +326,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!61 &316420144
 BoxCollider2D:
   m_ObjectHideFlags: 0
@@ -464,58 +412,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4bd153870599ce14c8d66c333bcece5b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TurtleController
-  _rb: {fileID: 0}
-  _animator: {fileID: 0}
-  movement:
-    m_Name: Movement
-    m_Type: 0
-    m_ExpectedControlType: 
-    m_Id: a33c53fd-5b08-48ad-86c8-cfd68f80331c
-    m_Processors: 
-    m_Interactions: 
-    m_SingletonActionBindings:
-    - m_Name: 2D Vector
-      m_Id: b5f39660-feff-4aad-90c0-3ebceb4436c5
-      m_Path: 2DVector
-      m_Interactions: 
-      m_Processors: 
-      m_Groups: 
-      m_Action: Movement
-      m_Flags: 4
-    - m_Name: up
-      m_Id: 44b40456-efe0-4758-92f1-3b6e2f961f40
-      m_Path: <Keyboard>/w
-      m_Interactions: 
-      m_Processors: 
-      m_Groups: 
-      m_Action: Movement
-      m_Flags: 8
-    - m_Name: down
-      m_Id: 1f97abb7-1c4f-4ca6-812d-a96c25cc4d63
-      m_Path: <Keyboard>/s
-      m_Interactions: 
-      m_Processors: 
-      m_Groups: 
-      m_Action: Movement
-      m_Flags: 8
-    - m_Name: left
-      m_Id: f0d2323c-7117-4f31-a986-12f645a56827
-      m_Path: <Keyboard>/a
-      m_Interactions: 
-      m_Processors: 
-      m_Groups: 
-      m_Action: Movement
-      m_Flags: 8
-    - m_Name: right
-      m_Id: fb0c9303-a47c-4343-87c8-0e465084e3ad
-      m_Path: <Keyboard>/d
-      m_Interactions: 
-      m_Processors: 
-      m_Groups: 
-      m_Action: Movement
-      m_Flags: 8
-    m_Flags: 0
+  body: {fileID: 0}
   moveForce: 5
+  maximumSpeed: 4
 --- !u!212 &316420147
 SpriteRenderer:
   serializedVersion: 2
