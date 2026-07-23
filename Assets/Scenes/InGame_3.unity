@@ -1575,9 +1575,7 @@ RectTransform:
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
-  - {fileID: 1895856185}
   - {fileID: 920061864}
-  - {fileID: 79104590}
   m_Father: {fileID: 735938992}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 1}
@@ -1609,8 +1607,8 @@ MonoBehaviour:
   turtleButtonText: {fileID: 0}
   bunnyButtonText: {fileID: 0}
   characterStatusText: {fileID: 0}
-  disconnectButton: {fileID: 79104591}
-  roleText: {fileID: 1895856186}
+  disconnectButton: {fileID: 0}
+  roleText: {fileID: 0}
   sessionText: {fileID: 920061865}
 --- !u!114 &633131983
 MonoBehaviour:
