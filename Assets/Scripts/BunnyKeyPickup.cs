@@ -19,6 +19,8 @@ namespace Hanseithon.Gameplay
         private float nextRequestTime;
 
         internal string InteractionId => interactionId;
+        internal Vector2 WorldCenter => BunnyKeyInteractionUtility.GetWorldCenter(this);
+        internal string ScenePath => gameObject.scene.path;
 
         private void OnEnable()
         {
@@ -67,7 +69,7 @@ namespace Hanseithon.Gameplay
             }
 
             nextRequestTime = Time.unscaledTime + requestRetryDelay;
-            inventory.RequestCollectKey(interactionId);
+            inventory.RequestCollectKey(interactionId, WorldCenter, ScenePath);
         }
 
         private void CollectForLocalSceneBunny()
@@ -116,6 +118,43 @@ namespace Hanseithon.Gameplay
             ActivePickups.Remove(id);
             pickup = null;
             return false;
+        }
+
+        internal static bool TryGetNearestActive(
+            Vector2 center,
+            string scenePath,
+            float maxDistance,
+            out BunnyKeyPickup pickup)
+        {
+            pickup = null;
+            float nearestDistanceSquared = maxDistance * maxDistance;
+
+            foreach (BunnyKeyPickup candidate in ActivePickups.Values)
+            {
+                if (candidate == null ||
+                    !candidate.gameObject.activeInHierarchy ||
+                    candidate.ScenePath != scenePath)
+                {
+                    continue;
+                }
+
+                float distanceSquared = (candidate.WorldCenter - center).sqrMagnitude;
+                if (distanceSquared <= nearestDistanceSquared)
+                {
+                    pickup = candidate;
+                    nearestDistanceSquared = distanceSquared;
+                }
+            }
+
+            return pickup != null;
+        }
+
+        internal static void ApplyCollectedNear(Vector2 center, string scenePath)
+        {
+            if (TryGetNearestActive(center, scenePath, 0.75f, out BunnyKeyPickup pickup))
+            {
+                pickup.ApplyCollected();
+            }
         }
 
         private void Unregister()

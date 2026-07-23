@@ -64,10 +64,23 @@ namespace Hanseithon.DualPlaySample
             NetworkVariableReadPermission.Everyone,
             NetworkVariableWritePermission.Owner);
 
+        private readonly NetworkVariable<Vector2> networkPhysicsPosition =
+            new NetworkVariable<Vector2>(
+                Vector2.zero,
+                NetworkVariableReadPermission.Everyone,
+                NetworkVariableWritePermission.Owner);
+
+        private readonly NetworkVariable<float> networkPhysicsRotation =
+            new NetworkVariable<float>(
+                0f,
+                NetworkVariableReadPermission.Everyone,
+                NetworkVariableWritePermission.Owner);
+
         private static bool hasLocalRole;
         private static PlayerRole localRole;
 
         private Rigidbody2D body;
+        private NetworkTransform networkTransform;
         private NetworkRigidbody2D networkBody;
         private BoxCollider2D bodyCollider;
         private Animator playerAnimator;
@@ -119,6 +132,9 @@ namespace Hanseithon.DualPlaySample
             {
                 body = gameObject.AddComponent<Rigidbody2D>();
             }
+
+            networkTransform = GetComponent<NetworkTransform>();
+            networkTransform.AuthorityMode = NetworkTransform.AuthorityModes.Owner;
 
             networkBody = GetComponent<NetworkRigidbody2D>();
             networkBody.UseRigidBodyForMotion = true;
@@ -353,8 +369,9 @@ namespace Hanseithon.DualPlaySample
             }
 
             carriedBoxSyncId = nearestBox.NetworkSyncId;
-            Vector2 carryPosition = (Vector2)transform.position +
-                                    (Vector2)transform.right * turtleCarrySkill.CarryDistance;
+            Vector2 carryPosition = GetAuthoritativePhysicsPosition() +
+                                    GetAuthoritativeFacingDirection() *
+                                    turtleCarrySkill.CarryDistance;
             nearestBox.SetNetworkPosition(carryPosition);
             SetNetworkCarryStateClientRpc(carriedBoxSyncId, true, carryPosition);
         }
@@ -362,7 +379,7 @@ namespace Hanseithon.DualPlaySample
         private TurtleCarryableBox FindNearestNetworkBox()
         {
             Collider2D[] overlaps = Physics2D.OverlapCircleAll(
-                transform.position,
+                GetAuthoritativePhysicsPosition(),
                 turtleCarrySkill.InteractionRadius);
             TurtleCarryableBox nearestBox = null;
             float nearestDistance = float.PositiveInfinity;
@@ -645,6 +662,7 @@ namespace Hanseithon.DualPlaySample
         {
             MaintainOwnedGameplayPhysics();
             RecoverMissedBunnyGroundCollision();
+            SynchronizeOwnedPhysicsState();
 
             if (!IsSpawned || !IsServer || string.IsNullOrEmpty(carriedBoxSyncId))
             {
@@ -661,8 +679,9 @@ namespace Hanseithon.DualPlaySample
                 return;
             }
 
-            Vector2 carryPosition = (Vector2)transform.position +
-                                    (Vector2)transform.right * turtleCarrySkill.CarryDistance;
+            Vector2 carryPosition = GetAuthoritativePhysicsPosition() +
+                                    GetAuthoritativeFacingDirection() *
+                                    turtleCarrySkill.CarryDistance;
             if (!carryableBox.IsHeld)
             {
                 carryableBox.TryPickUp(bodyCollider);
@@ -672,19 +691,74 @@ namespace Hanseithon.DualPlaySample
             SyncNetworkCarryPositionClientRpc(carryPosition);
         }
 
+        private void SynchronizeOwnedPhysicsState()
+        {
+            bool hasActiveRole = IsSpawned && hasSelectedRole.Value &&
+                                 IsGameplayScene(SceneManager.GetActiveScene().name);
+            if (!hasActiveRole)
+            {
+                return;
+            }
+
+            if (IsOwner)
+            {
+                Vector2 currentPosition = body.position;
+                float currentRotation = body.rotation;
+
+                if ((networkPhysicsPosition.Value - currentPosition).sqrMagnitude > 0.000001f)
+                {
+                    networkPhysicsPosition.Value = currentPosition;
+                }
+
+                if (Mathf.Abs(Mathf.DeltaAngle(networkPhysicsRotation.Value, currentRotation)) > 0.01f)
+                {
+                    networkPhysicsRotation.Value = currentRotation;
+                }
+
+                return;
+            }
+
+            body.position = networkPhysicsPosition.Value;
+            body.SetRotation(networkPhysicsRotation.Value);
+        }
+
+        private Vector2 GetAuthoritativePhysicsPosition()
+        {
+            return IsOwner ? body.position : networkPhysicsPosition.Value;
+        }
+
+        private Vector2 GetAuthoritativeFacingDirection()
+        {
+            float rotation = IsOwner ? body.rotation : networkPhysicsRotation.Value;
+            return Quaternion.Euler(0f, 0f, rotation) * Vector2.right;
+        }
+
         private void MaintainOwnedGameplayPhysics()
         {
-            bool ownsGameplayPhysics = IsSpawned && IsOwner && hasSelectedRole.Value &&
-                                       IsGameplayScene(SceneManager.GetActiveScene().name);
-            if (!ownsGameplayPhysics)
+            bool hasActiveRole = IsSpawned && hasSelectedRole.Value &&
+                                 IsGameplayScene(SceneManager.GetActiveScene().name);
+            if (!hasActiveRole)
             {
+                body.simulated = false;
+                bodyCollider.enabled = false;
                 hasPreviousBunnyPhysicsPosition = false;
                 return;
             }
 
             body.simulated = true;
-            body.bodyType = RigidbodyType2D.Dynamic;
-            bodyCollider.enabled = true;
+            bool ownsPhysics = IsOwner;
+            body.bodyType = ownsPhysics
+                ? RigidbodyType2D.Dynamic
+                : RigidbodyType2D.Kinematic;
+            bodyCollider.enabled = ownsPhysics;
+
+            if (!ownsPhysics)
+            {
+                body.linearVelocity = Vector2.zero;
+                hasPreviousBunnyPhysicsPosition = false;
+                return;
+            }
+
             bodyCollider.isTrigger = false;
 
             int playerLayer = LayerMask.NameToLayer("Player");
@@ -759,6 +833,20 @@ namespace Hanseithon.DualPlaySample
 
             previousBunnyPhysicsPosition = currentPosition;
             hasPreviousBunnyPhysicsPosition = true;
+        }
+
+        private void OnCollisionEnter2D(Collision2D collision)
+        {
+            string otherLayerName = LayerMask.LayerToName(collision.gameObject.layer);
+            Debug.Log(
+                $"[NetworkPlayer OnCollisionEnter2D] " +
+                $"Role={role.Value}, IsOwner={IsOwner}, IsServer={IsServer}, " +
+                $"OwnerClientId={OwnerClientId}, LocalClientId={NetworkManager?.LocalClientId}, " +
+                $"Other={collision.gameObject.name}, OtherLayer={otherLayerName}({collision.gameObject.layer}), " +
+                $"Contacts={collision.contactCount}, BodyType={body.bodyType}, " +
+                $"Simulated={body.simulated}, ColliderEnabled={bodyCollider.enabled}, " +
+                $"Position={body.position}, Velocity={body.linearVelocity}",
+                this);
         }
 
         private void ConfigureGameplayCollision()

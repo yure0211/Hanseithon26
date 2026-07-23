@@ -72,7 +72,7 @@ namespace Hanseithon.Gameplay
             }
 
             nextRequestTime = Time.unscaledTime + requestRetryDelay;
-            inventory.RequestUnlockKeyStone(interactionId);
+            inventory.RequestUnlockKeyStone(interactionId, WorldCenter, ScenePath);
         }
 
         private void UnlockForLocalSceneBunny()
@@ -149,6 +149,35 @@ namespace Hanseithon.Gameplay
             ActiveLocks.Remove(id);
             keyStone = null;
             return false;
+        }
+
+        internal static bool TryGetNearestActive(
+            Vector2 center,
+            string scenePath,
+            float maxDistance,
+            out BunnyKeyStoneLock keyStone)
+        {
+            keyStone = null;
+            float nearestDistanceSquared = maxDistance * maxDistance;
+
+            foreach (BunnyKeyStoneLock candidate in ActiveLocks.Values)
+            {
+                if (candidate == null ||
+                    !candidate.gameObject.activeInHierarchy ||
+                    candidate.ScenePath != scenePath)
+                {
+                    continue;
+                }
+
+                float distanceSquared = (candidate.WorldCenter - center).sqrMagnitude;
+                if (distanceSquared <= nearestDistanceSquared)
+                {
+                    keyStone = candidate;
+                    nearestDistanceSquared = distanceSquared;
+                }
+            }
+
+            return keyStone != null;
         }
 
         private void Unregister()

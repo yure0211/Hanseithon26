@@ -1,4 +1,4 @@
-using System.Text;
+using System.Collections.Generic;
 using Hanseithon.DualPlaySample;
 using Unity.Netcode;
 using UnityEngine;
@@ -14,17 +14,22 @@ namespace Hanseithon.Gameplay
 
         public static string BuildStableSceneId(Transform target)
         {
-            StringBuilder builder = new StringBuilder(target.gameObject.scene.path);
+            List<string> hierarchyPath = new List<string>();
             Transform current = target;
 
             while (current != null)
             {
-                builder.Append('/');
-                builder.Append(current.GetSiblingIndex());
+                Vector3 localPosition = current.localPosition;
+                hierarchyPath.Add(
+                    $"{current.name}[" +
+                    $"{Mathf.RoundToInt(localPosition.x * 1000f)}," +
+                    $"{Mathf.RoundToInt(localPosition.y * 1000f)}," +
+                    $"{Mathf.RoundToInt(localPosition.z * 1000f)}]");
                 current = current.parent;
             }
 
-            return builder.ToString();
+            hierarchyPath.Reverse();
+            return $"{target.gameObject.scene.path}:{string.Join("/", hierarchyPath)}";
         }
 
         public static bool IsWithinDistance(Transform actor, Component target, float distance)

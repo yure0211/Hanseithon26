@@ -35,68 +35,110 @@ namespace Hanseithon.Gameplay
             base.OnNetworkDespawn();
         }
 
-        public void RequestCollectKey(string interactionId)
+        public void RequestCollectKey(
+            string interactionId,
+            Vector2 worldCenter,
+            string scenePath)
         {
-            if (!CanLocalBunnyRequest() || string.IsNullOrEmpty(interactionId))
+            if (!CanLocalBunnyRequest() || string.IsNullOrEmpty(scenePath))
             {
                 return;
             }
 
-            CollectKeyServerRpc(interactionId);
+            CollectKeyServerRpc(interactionId, worldCenter, scenePath);
         }
 
-        public void RequestUnlockKeyStone(string interactionId)
+        public void RequestUnlockKeyStone(
+            string interactionId,
+            Vector2 worldCenter,
+            string scenePath)
         {
-            if (!CanLocalBunnyRequest() || keyCount.Value <= 0 || string.IsNullOrEmpty(interactionId))
+            if (!CanLocalBunnyRequest() || keyCount.Value <= 0 || string.IsNullOrEmpty(scenePath))
             {
                 return;
             }
 
-            UnlockKeyStoneServerRpc(interactionId);
+            UnlockKeyStoneServerRpc(interactionId, worldCenter, scenePath);
         }
 
         [ServerRpc]
-        private void CollectKeyServerRpc(string interactionId, ServerRpcParams rpcParams = default)
+        private void CollectKeyServerRpc(
+            string interactionId,
+            Vector2 worldCenter,
+            string scenePath,
+            ServerRpcParams rpcParams = default)
         {
-            if (!CanServerProcess(rpcParams.Receive.SenderClientId) ||
-                !BunnyKeyPickup.TryGetActive(interactionId, out BunnyKeyPickup pickup) ||
-                !pickup.IsWithinServerRange(transform))
+            if (!CanServerProcess(rpcParams.Receive.SenderClientId))
             {
                 return;
             }
 
+            bool foundPickup = BunnyKeyPickup.TryGetActive(
+                interactionId,
+                out BunnyKeyPickup pickup);
+            if (!foundPickup)
+            {
+                foundPickup = BunnyKeyPickup.TryGetNearestActive(
+                    worldCenter,
+                    scenePath,
+                    0.75f,
+                    out pickup);
+            }
+
+            if (!foundPickup || !pickup.IsWithinServerRange(transform))
+            {
+                return;
+            }
+
+            Vector2 authoritativeCenter = pickup.WorldCenter;
+            string authoritativeScenePath = pickup.ScenePath;
             pickup.ApplyCollected();
             keyCount.Value++;
-            ApplyKeyCollectedClientRpc(interactionId);
+            ApplyKeyCollectedClientRpc(authoritativeCenter, authoritativeScenePath);
         }
 
         [ServerRpc]
-        private void UnlockKeyStoneServerRpc(string interactionId, ServerRpcParams rpcParams = default)
+        private void UnlockKeyStoneServerRpc(
+            string interactionId,
+            Vector2 worldCenter,
+            string scenePath,
+            ServerRpcParams rpcParams = default)
         {
-            if (!CanServerProcess(rpcParams.Receive.SenderClientId) ||
-                keyCount.Value <= 0 ||
-                !BunnyKeyStoneLock.TryGetActive(interactionId, out BunnyKeyStoneLock keyStone) ||
-                !keyStone.IsWithinServerRange(transform))
+            if (!CanServerProcess(rpcParams.Receive.SenderClientId) || keyCount.Value <= 0)
+            {
+                return;
+            }
+
+            bool foundKeyStone = BunnyKeyStoneLock.TryGetActive(
+                interactionId,
+                out BunnyKeyStoneLock keyStone);
+            if (!foundKeyStone)
+            {
+                foundKeyStone = BunnyKeyStoneLock.TryGetNearestActive(
+                    worldCenter,
+                    scenePath,
+                    0.75f,
+                    out keyStone);
+            }
+
+            if (!foundKeyStone || !keyStone.IsWithinServerRange(transform))
             {
                 return;
             }
 
             Vector2 center = keyStone.WorldCenter;
             float radius = keyStone.NearbyBreakRadius;
-            string scenePath = keyStone.ScenePath;
+            string authoritativeScenePath = keyStone.ScenePath;
 
             keyCount.Value--;
-            BunnyKeyStoneLock.ApplyUnlockedInRadius(center, radius, scenePath);
-            ApplyKeyStonesUnlockedClientRpc(center, radius, scenePath);
+            BunnyKeyStoneLock.ApplyUnlockedInRadius(center, radius, authoritativeScenePath);
+            ApplyKeyStonesUnlockedClientRpc(center, radius, authoritativeScenePath);
         }
 
         [ClientRpc]
-        private void ApplyKeyCollectedClientRpc(string interactionId)
+        private void ApplyKeyCollectedClientRpc(Vector2 center, string scenePath)
         {
-            if (BunnyKeyPickup.TryGetActive(interactionId, out BunnyKeyPickup pickup))
-            {
-                pickup.ApplyCollected();
-            }
+            BunnyKeyPickup.ApplyCollectedNear(center, scenePath);
         }
 
         [ClientRpc]
