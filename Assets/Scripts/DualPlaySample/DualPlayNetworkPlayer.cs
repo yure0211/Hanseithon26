@@ -1,3 +1,4 @@
+using System;
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -196,7 +197,7 @@ namespace Hanseithon.DualPlaySample
         private void LateUpdate()
         {
             if (!IsSpawned || !IsOwner || !hasSelectedRole.Value ||
-                SceneManager.GetActiveScene().name != gameplaySceneName ||
+                !IsGameplayScene(SceneManager.GetActiveScene().name) ||
                 playerAnimator == null || playerAnimator.runtimeAnimatorController == null)
             {
                 return;
@@ -400,7 +401,7 @@ namespace Hanseithon.DualPlaySample
         private void ConfigureRoleAndScene()
         {
             PlayerRole currentRole = role.Value;
-            bool isGameplay = SceneManager.GetActiveScene().name == gameplaySceneName;
+            bool isGameplay = IsGameplayScene(SceneManager.GetActiveScene().name);
             bool controlsEnabled = IsSpawned && IsOwner && isGameplay && hasSelectedRole.Value;
 
             ConfigureVisual(currentRole);
@@ -519,6 +520,13 @@ namespace Hanseithon.DualPlaySample
             {
                 localCharacter.SetActive(false);
             }
+        }
+
+        private bool IsGameplayScene(string sceneName)
+        {
+            return string.Equals(sceneName, gameplaySceneName, StringComparison.OrdinalIgnoreCase) ||
+                   (!string.IsNullOrWhiteSpace(sceneName) &&
+                    sceneName.StartsWith("InGame", StringComparison.OrdinalIgnoreCase));
         }
     }
 }
