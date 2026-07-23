@@ -24,6 +24,24 @@ EditorBuildSettings:
     path: Assets/Scenes/InGame_1.unity
     guid: c0d9e3a4a6b3a5b469dc2b6e04b9d28b
   - enabled: 1
+    path: Assets/Scenes/bak_InGame_1.unity
+    guid: 9ebce2ca6bb5cbc4992c8969dddaafa0
+  - enabled: 1
+    path: Assets/Scenes/bak_Start.unity
+    guid: 6c50cabb70f872c4097853e80dff25f1
+  - enabled: 1
+    path: Assets/Scenes/InGame_3.unity
+    guid: d3a341440f1b08748ad15fa3e6185209
+  - enabled: 1
+    path: Assets/Scenes/InGame_4.unity
+    guid: 6ff396d986123974ba725ca54be97b96
+  - enabled: 1
+    path: Assets/Scenes/InGame_sample.unity
+    guid: 2d4a85c35ba787e4caf7680525525af8
+  - enabled: 1
+    path: Assets/Scenes/MainMenuScene.unity
+    guid: d72468e1234391d4890b819577ba48dc
+  - enabled: 1
     path: Assets/Scenes/InGame_portaldev.unity
     guid: 8713d8d486383ab4cb66dcd6444f0dc6
   - enabled: 1

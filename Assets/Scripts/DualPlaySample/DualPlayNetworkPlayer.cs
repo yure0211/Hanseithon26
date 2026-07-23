@@ -1,5 +1,7 @@
 using System;
+using Hanseithon.Gameplay;
 using Unity.Netcode;
+using Unity.Netcode.Components;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -7,6 +9,8 @@ namespace Hanseithon.DualPlaySample
 {
     [DefaultExecutionOrder(-100)]
     [RequireComponent(typeof(NetworkObject))]
+    [RequireComponent(typeof(NetworkTransform))]
+    [RequireComponent(typeof(NetworkRigidbody2D))]
     [RequireComponent(typeof(SpriteRenderer))]
     public sealed class DualPlayNetworkPlayer : NetworkBehaviour
     {
@@ -64,11 +68,16 @@ namespace Hanseithon.DualPlaySample
         private static PlayerRole localRole;
 
         private Rigidbody2D body;
+        private NetworkRigidbody2D networkBody;
         private BoxCollider2D bodyCollider;
         private Animator playerAnimator;
         private BunnyController bunnyController;
         private TurtleController turtleController;
+        private TurtleCarrySkill turtleCarrySkill;
         private bool placedInGameplay;
+        private string carriedBoxSyncId = string.Empty;
+        private Vector2 previousBunnyPhysicsPosition;
+        private bool hasPreviousBunnyPhysicsPosition;
 
         private static readonly Color TurtleColor = new Color(0.28f, 0.72f, 0.4f, 1f);
         private static readonly Color BunnyColor = new Color(0.95f, 0.62f, 0.3f, 1f);
@@ -80,6 +89,9 @@ namespace Hanseithon.DualPlaySample
         public static string LocalRoleName => hasLocalRole ? localRole.ToString() : "Not selected";
         public PlayerRole Role => role.Value;
         public bool HasSelectedRole => hasSelectedRole.Value;
+        public bool IsNetworkCarryAvailable =>
+            IsSpawned && NetworkManager != null && NetworkManager.IsListening;
+        public bool IsCarryingNetworkBox => !string.IsNullOrEmpty(carriedBoxSyncId);
 
         private void Awake()
         {
@@ -108,6 +120,11 @@ namespace Hanseithon.DualPlaySample
                 body = gameObject.AddComponent<Rigidbody2D>();
             }
 
+            networkBody = GetComponent<NetworkRigidbody2D>();
+            networkBody.UseRigidBodyForMotion = true;
+            networkBody.AutoUpdateKinematicState = true;
+            networkBody.AutoSetKinematicOnDespawn = true;
+
             bodyCollider = GetComponent<BoxCollider2D>();
             if (bodyCollider == null)
             {
@@ -127,8 +144,15 @@ namespace Hanseithon.DualPlaySample
                 turtleController = gameObject.AddComponent<TurtleController>();
             }
 
+            turtleCarrySkill = GetComponent<TurtleCarrySkill>();
+            if (turtleCarrySkill == null)
+            {
+                turtleCarrySkill = gameObject.AddComponent<TurtleCarrySkill>();
+            }
+
             bunnyController.enabled = false;
             turtleController.enabled = false;
+            turtleCarrySkill.enabled = false;
             body.simulated = false;
             bodyCollider.enabled = false;
         }
@@ -159,6 +183,8 @@ namespace Hanseithon.DualPlaySample
 
         public override void OnNetworkDespawn()
         {
+            carriedBoxSyncId = string.Empty;
+            hasPreviousBunnyPhysicsPosition = false;
             role.OnValueChanged -= HandleRoleChanged;
             hasSelectedRole.OnValueChanged -= HandleSelectionChanged;
             animationIsRunning.OnValueChanged -= HandleAnimationIsRunningChanged;
@@ -179,6 +205,7 @@ namespace Hanseithon.DualPlaySample
 
             bunnyController.enabled = false;
             turtleController.enabled = false;
+            turtleCarrySkill.enabled = false;
             base.OnNetworkDespawn();
         }
 
@@ -293,6 +320,159 @@ namespace Hanseithon.DualPlaySample
             SelectRoleServerRpc(requestedRole);
         }
 
+        public void RequestToggleNetworkCarry()
+        {
+            if (!IsNetworkCarryAvailable || !IsOwner ||
+                !hasSelectedRole.Value || role.Value != PlayerRole.Turtle)
+            {
+                return;
+            }
+
+            ToggleNetworkCarryServerRpc();
+        }
+
+        [ServerRpc]
+        private void ToggleNetworkCarryServerRpc()
+        {
+            if (!IsServer || !hasSelectedRole.Value || role.Value != PlayerRole.Turtle ||
+                !IsGameplayScene(SceneManager.GetActiveScene().name))
+            {
+                return;
+            }
+
+            if (!string.IsNullOrEmpty(carriedBoxSyncId))
+            {
+                DropNetworkCarry();
+                return;
+            }
+
+            TurtleCarryableBox nearestBox = FindNearestNetworkBox();
+            if (nearestBox == null || !nearestBox.TryPickUp(bodyCollider))
+            {
+                return;
+            }
+
+            carriedBoxSyncId = nearestBox.NetworkSyncId;
+            Vector2 carryPosition = (Vector2)transform.position +
+                                    (Vector2)transform.right * turtleCarrySkill.CarryDistance;
+            nearestBox.SetNetworkPosition(carryPosition);
+            SetNetworkCarryStateClientRpc(carriedBoxSyncId, true, carryPosition);
+        }
+
+        private TurtleCarryableBox FindNearestNetworkBox()
+        {
+            Collider2D[] overlaps = Physics2D.OverlapCircleAll(
+                transform.position,
+                turtleCarrySkill.InteractionRadius);
+            TurtleCarryableBox nearestBox = null;
+            float nearestDistance = float.PositiveInfinity;
+            Scene activeScene = SceneManager.GetActiveScene();
+
+            for (int i = 0; i < overlaps.Length; i++)
+            {
+                TurtleCarryableBox candidate =
+                    overlaps[i].GetComponentInParent<TurtleCarryableBox>();
+                if (candidate == null || candidate.IsHeld ||
+                    candidate.gameObject.scene != activeScene)
+                {
+                    continue;
+                }
+
+                float distance = ((Vector2)candidate.transform.position -
+                                  (Vector2)transform.position).sqrMagnitude;
+                if (distance < nearestDistance)
+                {
+                    nearestBox = candidate;
+                    nearestDistance = distance;
+                }
+            }
+
+            return nearestBox;
+        }
+
+        private void DropNetworkCarry()
+        {
+            string syncId = carriedBoxSyncId;
+            carriedBoxSyncId = string.Empty;
+            Vector2 dropPosition = transform.position;
+
+            if (TurtleCarryableBox.TryGetActive(syncId, out TurtleCarryableBox carryableBox))
+            {
+                dropPosition = carryableBox.transform.position;
+                if (carryableBox.IsHeld)
+                {
+                    carryableBox.Drop(Vector2.zero);
+                }
+            }
+
+            SetNetworkCarryStateClientRpc(syncId, false, dropPosition);
+        }
+
+        [ClientRpc]
+        private void SetNetworkCarryStateClientRpc(
+            string syncId,
+            bool isHeld,
+            Vector2 worldPosition)
+        {
+            if (isHeld)
+            {
+                carriedBoxSyncId = syncId;
+            }
+            else if (carriedBoxSyncId == syncId)
+            {
+                carriedBoxSyncId = string.Empty;
+            }
+
+            if (!TurtleCarryableBox.TryGetActive(syncId, out TurtleCarryableBox carryableBox))
+            {
+                return;
+            }
+
+            carryableBox.SetNetworkPosition(worldPosition);
+            if (isHeld)
+            {
+                if (!carryableBox.IsHeld)
+                {
+                    carryableBox.TryPickUp(bodyCollider);
+                }
+            }
+            else if (carryableBox.IsHeld)
+            {
+                carryableBox.Drop(Vector2.zero);
+            }
+        }
+
+        [ClientRpc(Delivery = RpcDelivery.Unreliable)]
+        private void SyncNetworkCarryPositionClientRpc(Vector2 worldPosition)
+        {
+            if (string.IsNullOrEmpty(carriedBoxSyncId) ||
+                !TurtleCarryableBox.TryGetActive(
+                    carriedBoxSyncId,
+                    out TurtleCarryableBox carryableBox))
+            {
+                return;
+            }
+
+            if (!carryableBox.IsHeld)
+            {
+                carryableBox.TryPickUp(bodyCollider);
+            }
+
+            carryableBox.SetNetworkPosition(worldPosition);
+        }
+
+        [ClientRpc]
+        private void ClearNetworkCarryClientRpc()
+        {
+            string syncId = carriedBoxSyncId;
+            carriedBoxSyncId = string.Empty;
+            if (TurtleCarryableBox.TryGetActive(syncId, out TurtleCarryableBox carryableBox) &&
+                carryableBox.IsHeld)
+            {
+                carryableBox.Drop(Vector2.zero);
+            }
+        }
+
         public static bool IsRoleTakenByOther(PlayerRole requestedRole)
         {
             DualPlayNetworkPlayer[] players = FindObjectsByType<DualPlayNetworkPlayer>(FindObjectsSortMode.None);
@@ -394,6 +574,8 @@ namespace Hanseithon.DualPlaySample
 
         private void HandleActiveSceneChanged(Scene previousScene, Scene newScene)
         {
+            carriedBoxSyncId = string.Empty;
+            hasPreviousBunnyPhysicsPosition = false;
             placedInGameplay = false;
             ConfigureRoleAndScene();
         }
@@ -403,6 +585,12 @@ namespace Hanseithon.DualPlaySample
             PlayerRole currentRole = role.Value;
             bool isGameplay = IsGameplayScene(SceneManager.GetActiveScene().name);
             bool controlsEnabled = IsSpawned && IsOwner && isGameplay && hasSelectedRole.Value;
+            Vector2 fallbackSpawnPosition = currentRole == PlayerRole.Turtle
+                ? turtleSpawnPosition
+                : bunnySpawnPosition;
+            Vector2 sceneSpawnPosition = isGameplay
+                ? FindSceneCharacterPosition(currentRole, fallbackSpawnPosition)
+                : fallbackSpawnPosition;
 
             ConfigureVisual(currentRole);
             playerRenderer.enabled = isGameplay && hasSelectedRole.Value;
@@ -415,9 +603,18 @@ namespace Hanseithon.DualPlaySample
 
             bunnyController.enabled = controlsEnabled && currentRole == PlayerRole.Bunny;
             turtleController.enabled = controlsEnabled && currentRole == PlayerRole.Turtle;
-            body.simulated = controlsEnabled;
+            turtleCarrySkill.enabled = controlsEnabled && currentRole == PlayerRole.Turtle;
+            // Keep remote kinematic bodies simulated so NetworkRigidbody2D can apply
+            // synchronized positions through the 2D physics engine. Only the owner
+            // receives input and owns an enabled collision shape.
+            body.simulated = isGameplay && hasSelectedRole.Value;
             bodyCollider.enabled = controlsEnabled;
             body.constraints = RigidbodyConstraints2D.FreezeRotation;
+
+            if (controlsEnabled)
+            {
+                ConfigureGameplayCollision();
+            }
 
             if (!isGameplay)
             {
@@ -438,13 +635,174 @@ namespace Hanseithon.DualPlaySample
 
             if (controlsEnabled && !placedInGameplay)
             {
-                Vector2 spawnPosition = currentRole == PlayerRole.Turtle
-                    ? turtleSpawnPosition
-                    : bunnySpawnPosition;
-                body.position = spawnPosition;
+                body.position = sceneSpawnPosition;
                 body.linearVelocity = Vector2.zero;
                 placedInGameplay = true;
             }
+        }
+
+        private void FixedUpdate()
+        {
+            MaintainOwnedGameplayPhysics();
+            RecoverMissedBunnyGroundCollision();
+
+            if (!IsSpawned || !IsServer || string.IsNullOrEmpty(carriedBoxSyncId))
+            {
+                return;
+            }
+
+            if (!IsGameplayScene(SceneManager.GetActiveScene().name) ||
+                !TurtleCarryableBox.TryGetActive(
+                    carriedBoxSyncId,
+                    out TurtleCarryableBox carryableBox))
+            {
+                carriedBoxSyncId = string.Empty;
+                ClearNetworkCarryClientRpc();
+                return;
+            }
+
+            Vector2 carryPosition = (Vector2)transform.position +
+                                    (Vector2)transform.right * turtleCarrySkill.CarryDistance;
+            if (!carryableBox.IsHeld)
+            {
+                carryableBox.TryPickUp(bodyCollider);
+            }
+
+            carryableBox.SetNetworkPosition(carryPosition);
+            SyncNetworkCarryPositionClientRpc(carryPosition);
+        }
+
+        private void MaintainOwnedGameplayPhysics()
+        {
+            bool ownsGameplayPhysics = IsSpawned && IsOwner && hasSelectedRole.Value &&
+                                       IsGameplayScene(SceneManager.GetActiveScene().name);
+            if (!ownsGameplayPhysics)
+            {
+                hasPreviousBunnyPhysicsPosition = false;
+                return;
+            }
+
+            body.simulated = true;
+            body.bodyType = RigidbodyType2D.Dynamic;
+            bodyCollider.enabled = true;
+            bodyCollider.isTrigger = false;
+
+            int playerLayer = LayerMask.NameToLayer("Player");
+            if (playerLayer >= 0)
+            {
+                gameObject.layer = playerLayer;
+            }
+        }
+
+        private void RecoverMissedBunnyGroundCollision()
+        {
+            bool isOwnedBunny = IsSpawned && IsOwner && hasSelectedRole.Value &&
+                                role.Value == PlayerRole.Bunny &&
+                                IsGameplayScene(SceneManager.GetActiveScene().name) &&
+                                body.simulated && bodyCollider.enabled;
+            if (!isOwnedBunny)
+            {
+                hasPreviousBunnyPhysicsPosition = false;
+                return;
+            }
+
+            Vector2 currentPosition = body.position;
+            if (hasPreviousBunnyPhysicsPosition &&
+                currentPosition.y < previousBunnyPhysicsPosition.y)
+            {
+                int groundLayer = LayerMask.NameToLayer("Ground");
+                if (groundLayer >= 0)
+                {
+                    Vector2 scale = transform.lossyScale;
+                    Vector2 fullColliderSize = new Vector2(
+                        Mathf.Abs(bodyCollider.size.x * scale.x),
+                        Mathf.Abs(bodyCollider.size.y * scale.y));
+                    Vector2 castSize = fullColliderSize * 0.9f;
+                    Vector2 worldOffset = new Vector2(
+                        bodyCollider.offset.x * scale.x,
+                        bodyCollider.offset.y * scale.y);
+                    Vector2 castOrigin = new Vector2(
+                        currentPosition.x + worldOffset.x,
+                        previousBunnyPhysicsPosition.y + worldOffset.y);
+                    float fallDistance = previousBunnyPhysicsPosition.y -
+                                         currentPosition.y + 0.1f;
+                    RaycastHit2D[] hits = Physics2D.BoxCastAll(
+                        castOrigin,
+                        castSize,
+                        0f,
+                        Vector2.down,
+                        fallDistance,
+                        1 << groundLayer);
+
+                    for (int i = 0; i < hits.Length; i++)
+                    {
+                        RaycastHit2D hit = hits[i];
+                        if (hit.collider == null || hit.collider.isTrigger)
+                        {
+                            continue;
+                        }
+
+                        float sizeCorrection = (fullColliderSize.y - castSize.y) * 0.5f;
+                        float correctedY = hit.centroid.y - worldOffset.y +
+                                           sizeCorrection + Physics2D.defaultContactOffset;
+                        if (correctedY >= currentPosition.y)
+                        {
+                            body.position = new Vector2(currentPosition.x, correctedY);
+                            body.linearVelocityY = 0f;
+                            currentPosition = body.position;
+                        }
+
+                        break;
+                    }
+                }
+            }
+
+            previousBunnyPhysicsPosition = currentPosition;
+            hasPreviousBunnyPhysicsPosition = true;
+        }
+
+        private void ConfigureGameplayCollision()
+        {
+            int playerLayer = LayerMask.NameToLayer("Player");
+            int groundLayer = LayerMask.NameToLayer("Ground");
+
+            if (playerLayer >= 0)
+            {
+                gameObject.layer = playerLayer;
+            }
+
+            body.bodyType = RigidbodyType2D.Dynamic;
+            body.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
+            bodyCollider.isTrigger = false;
+
+            if (playerLayer >= 0 && groundLayer >= 0)
+            {
+                Physics2D.IgnoreLayerCollision(playerLayer, groundLayer, false);
+            }
+        }
+
+        private static Vector2 FindSceneCharacterPosition(
+            PlayerRole currentRole,
+            Vector2 fallbackPosition)
+        {
+            string characterName = currentRole == PlayerRole.Turtle ? "Turtle" : "Bunny";
+            Scene activeScene = SceneManager.GetActiveScene();
+            Transform[] sceneTransforms = FindObjectsByType<Transform>(
+                FindObjectsInactive.Include,
+                FindObjectsSortMode.None);
+
+            for (int i = 0; i < sceneTransforms.Length; i++)
+            {
+                Transform sceneTransform = sceneTransforms[i];
+                if (sceneTransform.name == characterName &&
+                    sceneTransform.gameObject.scene == activeScene &&
+                    sceneTransform.GetComponent<NetworkObject>() == null)
+                {
+                    return sceneTransform.position;
+                }
+            }
+
+            return fallbackPosition;
         }
 
         private void ConfigureVisual(PlayerRole currentRole)

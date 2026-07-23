@@ -12,12 +12,14 @@ GameObject:
   - component: {fileID: 8711481469115932740}
   - component: {fileID: 2557649007392274112}
   - component: {fileID: 8266489352670476759}
+  - component: {fileID: 5758489157720372927}
   - component: {fileID: 7642618567174732716}
   - component: {fileID: 4900422683641499323}
   - component: {fileID: 8035447204584577920}
   - component: {fileID: 8791971598969372795}
   - component: {fileID: 3292353202517569702}
   - component: {fileID: 6120667248311829944}
+  - component: {fileID: 924925277744803296}
   m_Layer: 7
   m_Name: DualPlayNetworkPlayer
   m_TagString: Untagged
@@ -171,6 +173,22 @@ MonoBehaviour:
   SwitchTransformSpaceWhenParented: 0
   Interpolate: 1
   SlerpPosition: 0
+--- !u!114 &5758489157720372927
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 816875712990026510}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 80d7c879794dfda4687da0e400131852, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.Components.NetworkRigidbody2D
+  NetworkRigidbodyBaseExpanded: 0
+  UseRigidBodyForMotion: 1
+  AutoUpdateKinematicState: 1
+  AutoSetKinematicOnDespawn: 1
 --- !u!114 &7642618567174732716
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -217,7 +235,7 @@ Rigidbody2D:
     m_Bits: 0
   m_Interpolate: 0
   m_SleepingMode: 1
-  m_CollisionDetection: 0
+  m_CollisionDetection: 1
   m_Constraints: 4
 --- !u!61 &8035447204584577920
 BoxCollider2D:
@@ -314,3 +332,19 @@ MonoBehaviour:
   m_Name:
   m_EditorClassIdentifier: Assembly-CSharp::Hanseithon.Gameplay.BunnyKeyInventory
   ShowTopMostFoldoutHeaderGroup: 1
+--- !u!114 &924925277744803296
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 816875712990026510}
+  m_Enabled: 0
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 51e23f4df0064df4ca7be279758f4cfd, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::Hanseithon.Gameplay.TurtleCarrySkill
+  interactionKey: 19
+  interactionRadius: 1.75
+  carryDistance: 1.15
+  showControlHint: 1

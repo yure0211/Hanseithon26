@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace Hanseithon.Gameplay
@@ -9,6 +10,8 @@ namespace Hanseithon.Gameplay
     public sealed class TurtleCarryableBox : MonoBehaviour
     {
         private const string HeldLayerName = "Player";
+        private static readonly Dictionary<string, TurtleCarryableBox> ActiveBoxes =
+            new Dictionary<string, TurtleCarryableBox>();
 
         [SerializeField, Min(1f)] private float heldScaleMultiplier = 1.15f;
 
@@ -21,12 +24,20 @@ namespace Hanseithon.Gameplay
         private float originalLinearDamping;
         private int originalLayer;
         private Vector3 originalScale;
+        private string networkSyncId;
 
         public bool IsHeld { get; private set; }
+        public string NetworkSyncId => networkSyncId;
 
         private void Awake()
         {
             CacheComponents();
+        }
+
+        private void OnEnable()
+        {
+            networkSyncId = BuildNetworkSyncId(transform);
+            ActiveBoxes[networkSyncId] = this;
         }
 
         private void Reset()
@@ -82,6 +93,12 @@ namespace Hanseithon.Gameplay
             body.MovePosition(worldPosition);
         }
 
+        public void SetNetworkPosition(Vector2 worldPosition)
+        {
+            CacheComponents();
+            body.position = worldPosition;
+        }
+
         public void Drop(Vector2 releaseVelocity)
         {
             if (!IsHeld)
@@ -108,10 +125,48 @@ namespace Hanseithon.Gameplay
 
         private void OnDisable()
         {
+            if (!string.IsNullOrEmpty(networkSyncId) &&
+                ActiveBoxes.TryGetValue(networkSyncId, out TurtleCarryableBox registered) &&
+                registered == this)
+            {
+                ActiveBoxes.Remove(networkSyncId);
+            }
+
             if (IsHeld)
             {
                 Drop(Vector2.zero);
             }
+        }
+
+        public static bool TryGetActive(string syncId, out TurtleCarryableBox carryableBox)
+        {
+            if (!string.IsNullOrEmpty(syncId) &&
+                ActiveBoxes.TryGetValue(syncId, out carryableBox) &&
+                carryableBox != null &&
+                carryableBox.gameObject.activeInHierarchy)
+            {
+                return true;
+            }
+
+            carryableBox = null;
+            return false;
+        }
+
+        private static string BuildNetworkSyncId(Transform target)
+        {
+            // Runtime-spawned network objects can change root sibling indices in a
+            // different order on each peer. Names from the serialized hierarchy do
+            // not, so use them to make every client resolve the same scene box.
+            List<string> hierarchyPath = new List<string>();
+            Transform current = target;
+            while (current != null)
+            {
+                hierarchyPath.Add(current.name);
+                current = current.parent;
+            }
+
+            hierarchyPath.Reverse();
+            return $"{target.gameObject.scene.path}:{string.Join("/", hierarchyPath)}";
         }
 
         private void CacheComponents()

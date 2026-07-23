@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
+using Hanseithon.DualPlaySample;
 using Hanseithon.UI;
 
 namespace Hanseithon.Gameplay
@@ -17,13 +18,22 @@ namespace Hanseithon.Gameplay
         private Rigidbody2D body;
         private Collider2D bodyCollider;
         private TurtleCarryableBox heldBox;
+        private DualPlayNetworkPlayer networkPlayer;
 
-        public bool IsCarrying => heldBox != null;
+        public bool IsCarrying => UsesNetworkCarry
+            ? networkPlayer.IsCarryingNetworkBox
+            : heldBox != null;
+        public float InteractionRadius => interactionRadius;
+        public float CarryDistance => carryDistance;
+
+        private bool UsesNetworkCarry =>
+            networkPlayer != null && networkPlayer.IsNetworkCarryAvailable;
 
         private void Awake()
         {
             body = GetComponent<Rigidbody2D>();
             bodyCollider = GetComponent<Collider2D>();
+            networkPlayer = GetComponent<DualPlayNetworkPlayer>();
         }
 
         private void Update()
@@ -36,13 +46,20 @@ namespace Hanseithon.Gameplay
 
             if (keyboard[interactionKey].wasPressedThisFrame)
             {
-                ToggleCarry();
+                if (UsesNetworkCarry)
+                {
+                    networkPlayer.RequestToggleNetworkCarry();
+                }
+                else
+                {
+                    ToggleCarry();
+                }
             }
         }
 
         private void FixedUpdate()
         {
-            if (heldBox == null)
+            if (UsesNetworkCarry || heldBox == null)
             {
                 return;
             }
@@ -54,7 +71,10 @@ namespace Hanseithon.Gameplay
 
         private void OnDisable()
         {
-            DropHeldBox();
+            if (!UsesNetworkCarry)
+            {
+                DropHeldBox();
+            }
         }
 
         private void ToggleCarry()
@@ -116,7 +136,7 @@ namespace Hanseithon.Gameplay
                 return;
             }
 
-            string action = heldBox == null ? "가까운 상자 들기" : "상자 내려놓기";
+            string action = IsCarrying ? "상자 내려놓기" : "가까운 상자 들기";
             Matrix4x4 previousMatrix = DualPlayUiTheme.BeginCanvas(false);
             GUI.Label(
                 new Rect(20f, DualPlayUiTheme.VirtualHeight - 70f, 340f, 50f),
